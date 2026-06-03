@@ -24,7 +24,10 @@ async def seed_static_data(
 ) -> tuple[int, int, int]:
     """Fetch routes + per-route pattern stops, upsert into the DB.
 
-    Returns (route_count, unique_stop_count, route_stop_link_count).
+    Returns (route_count, unique_stop_count, route_stop_link_count) where the
+    link count is the total number of route-stop relationships processed
+    (idempotent re-runs report the same total even though no new rows are
+    inserted).
     All network calls happen first; a single transaction does the writes.
     """
     routes = await client.get_routes()

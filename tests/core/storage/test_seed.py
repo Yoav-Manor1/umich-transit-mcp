@@ -69,7 +69,14 @@ async def test_seed_is_idempotent(engine):
 
 
 async def test_seed_updates_existing_route_name(engine):
-    await seed_static_data(engine, FakeClient())
+    client = FakeClient()
+    await seed_static_data(engine, client)
+    # Mutate upstream data and re-seed: the upsert should UPDATE the row.
+    client._routes[1] = RouteRecord(
+        id="CN", agency="mbus", short_name="CN",
+        long_name="Commuter North (renamed)", color=None, raw={},
+    )
+    await seed_static_data(engine, client)
     with session_scope(engine) as s:
         r = s.get(Route, "CN")
-        assert r.long_name == "Commuter North"
+        assert r.long_name == "Commuter North (renamed)"
