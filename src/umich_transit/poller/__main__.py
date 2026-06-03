@@ -10,6 +10,11 @@ from umich_transit.poller.runner import run
 
 def main() -> None:
     logging.basicConfig(level=settings.log_level)
+    # Quiet httpx/httpcore: their INFO logs print full request URLs, which for
+    # BusTime include the API key as a query param. Keep them at WARNING so the
+    # key never lands in logs and the poller output stays readable.
+    logging.getLogger("httpx").setLevel(logging.WARNING)
+    logging.getLogger("httpcore").setLevel(logging.WARNING)
     structlog.configure(
         processors=[
             structlog.processors.add_log_level,
