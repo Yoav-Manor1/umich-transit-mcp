@@ -331,6 +331,11 @@ has been running for 6 months and collected 18M data points."*
 
 - Magic Bus API key registration flow — needs an account; document the steps in
   README during implementation.
+  - **RESOLVED (2026-06-02):** Live probing showed Magic Bus now runs the
+    **Clever Devices BusTime API v3** (`/bustime/api/v3`), not DoubleMap. It
+    requires `?key=&format=json` and wraps responses in `{"bustime-response":{}}`.
+    A free key requires developer-account registration. The client targets
+    BusTime; timestamps are `America/Detroit` and converted to UTC on write.
 - Whether to also ingest AAATA GTFS-static schedule data in MVP, or only their
   real-time feed. Leaning real-time only for MVP; static can be backfilled.
 - Trip planner v1 supports only same-route trips (no transfers). Transfers

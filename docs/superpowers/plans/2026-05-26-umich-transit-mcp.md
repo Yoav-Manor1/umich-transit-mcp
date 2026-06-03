@@ -10,6 +10,33 @@
 
 ---
 
+## ⚠️ Implementation Update (2026-06-02): Magic Bus uses Clever Devices BusTime, not DoubleMap
+
+Live probing during execution revealed that `mbus.ltp.umich.edu` was rebuilt as
+a SPA backed by the **Clever Devices BusTime API v3** at
+`https://mbus.ltp.umich.edu/bustime/api/v3`. The DoubleMap `/public/*.json`
+endpoints the original plan assumed no longer exist. Confirmed behavior:
+
+- All requests need `?key=<APIKEY>&format=json`. Responses are wrapped in
+  `{"bustime-response": {...}}`. Without a key the API returns
+  `{"bustime-response":{"error":[{"msg":"No API access key supplied"}]}}`.
+- A free developer key requires registering an account via the Magic Bus
+  developer portal — document this in the README (Task 16).
+
+**Impact on tasks:**
+- **Task 5** (this task) is re-specified below for BusTime. The agency-agnostic
+  typed records in `base.py` are unchanged; only the parsing changes.
+- **Task 6** (seed) now builds routes, stops, AND `route_stops` from BusTime
+  `getpatterns` (the original plan never populated `route_stops` — a latent gap
+  this fixes).
+- **Task 11** (runner) passes the known route-id list to `get_vehicle_positions`.
+- **Task 12** (service) is unaffected — it still calls `get_etas(stop_id)`.
+
+BusTime timestamps are agency-local (`America/Detroit`) with no zone; the client
+localizes them, and the `TZDateTime` column type converts to UTC on write.
+
+---
+
 ## Task 1: Project scaffold
 
 **Files:**
