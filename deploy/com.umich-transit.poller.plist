@@ -1,0 +1,51 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+  macOS launchd agent template for the poller. Runs the collector hands-free
+  whenever the Mac is on (auto-start at login, auto-restart on crash, keeps the
+  machine awake while running). Replace the two REPLACE_WITH_* paths, then:
+
+    cp deploy/com.umich-transit.poller.plist ~/Library/LaunchAgents/
+    launchctl load -w ~/Library/LaunchAgents/com.umich-transit.poller.plist
+
+  Or use the heredoc in docs/DEPLOY.md, which fills in the paths automatically.
+-->
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+    <key>Label</key>
+    <string>com.umich-transit.poller</string>
+
+    <key>ProgramArguments</key>
+    <array>
+        <string>/usr/bin/caffeinate</string>
+        <string>-is</string>
+        <string>REPLACE_WITH_UV_PATH</string>
+        <string>run</string>
+        <string>umich-transit-poller</string>
+    </array>
+
+    <key>WorkingDirectory</key>
+    <string>REPLACE_WITH_PROJECT_DIR</string>
+
+    <key>EnvironmentVariables</key>
+    <dict>
+        <key>PATH</key>
+        <string>/opt/homebrew/bin:/usr/bin:/bin:/usr/sbin:/sbin</string>
+    </dict>
+
+    <key>RunAtLoad</key>
+    <true/>
+    <key>KeepAlive</key>
+    <true/>
+    <key>ThrottleInterval</key>
+    <integer>15</integer>
+
+    <key>StandardOutPath</key>
+    <string>REPLACE_WITH_PROJECT_DIR/poller.log</string>
+    <key>StandardErrorPath</key>
+    <string>REPLACE_WITH_PROJECT_DIR/poller.log</string>
+
+    <key>ProcessType</key>
+    <string>Background</string>
+</dict>
+</plist>

@@ -81,6 +81,52 @@ sudo systemctl enable --now umich-transit-poller
 journalctl -u umich-transit-poller -f           # watch logs
 ```
 
+## Option C — macOS (launchd, laptop stopgap)
+
+Not truly 24/7 (a laptop sleeps), but useful while you set up a server: this
+runs the poller automatically whenever your Mac is on — auto-start at login,
+auto-restart on crash, and it keeps the Mac awake while running. Run from the
+repo directory; the heredoc fills in your `uv` path and project dir for you:
+
+```bash
+cat > ~/Library/LaunchAgents/com.umich-transit.poller.plist <<EOF
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+  <key>Label</key><string>com.umich-transit.poller</string>
+  <key>ProgramArguments</key>
+  <array>
+    <string>/usr/bin/caffeinate</string><string>-is</string>
+    <string>$(command -v uv)</string><string>run</string><string>umich-transit-poller</string>
+  </array>
+  <key>WorkingDirectory</key><string>$(pwd)</string>
+  <key>EnvironmentVariables</key><dict>
+    <key>PATH</key><string>/opt/homebrew/bin:/usr/bin:/bin:/usr/sbin:/sbin</string>
+  </dict>
+  <key>RunAtLoad</key><true/>
+  <key>KeepAlive</key><true/>
+  <key>ThrottleInterval</key><integer>15</integer>
+  <key>StandardOutPath</key><string>$(pwd)/poller.log</string>
+  <key>StandardErrorPath</key><string>$(pwd)/poller.log</string>
+  <key>ProcessType</key><string>Background</string>
+</dict>
+</plist>
+EOF
+launchctl load -w ~/Library/LaunchAgents/com.umich-transit.poller.plist
+```
+
+Manage it:
+
+```bash
+launchctl list | grep umich-transit     # a PID number = running
+tail -f poller.log                       # watch it
+launchctl unload -w ~/Library/LaunchAgents/com.umich-transit.poller.plist   # stop + disable
+launchctl load   -w ~/Library/LaunchAgents/com.umich-transit.poller.plist   # start again
+```
+
+(A pre-filled template also lives at `deploy/com.umich-transit.poller.plist`.)
+
 ## Using the collected data with Claude (locally)
 
 The poller now writes the SQLite DB on the **server**, while the MCP server runs
