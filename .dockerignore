@@ -1,0 +1,24 @@
+# Keep the build context (and image) small and secret-free.
+.git
+.github
+.venv
+venv
+data
+*.db
+*.db-journal
+*.db-wal
+*.db-shm
+*.log
+.env
+__pycache__
+*.py[cod]
+.pytest_cache
+.mypy_cache
+.ruff_cache
+.coverage
+htmlcov
+dist
+build
+docs
+tests
+screenshots

@@ -123,6 +123,19 @@ Then ask Claude things like *"When's the next Commuter North bus at the Central
 Campus Transit Center, and is it usually on time right now?"* or *"Plan a trip
 from Pierpont Commons to the Central Campus Transit Center."*
 
+## Running it 24/7
+
+For continuous data collection, run the poller on an always-on host instead of
+your laptop. The repo ships a `Dockerfile` + `docker-compose.yml` (and a systemd
+unit) so deployment is a few commands:
+
+```bash
+docker compose up -d --build   # auto-restarting, survives reboots
+```
+
+Full walkthrough (free VPS options, systemd alternative, pulling the data back
+to your laptop): **[docs/DEPLOY.md](docs/DEPLOY.md)**.
+
 ## Known limitations
 
 - **Polling-based arrival detection.** If a bus passes a stop entirely between

@@ -1,0 +1,26 @@
+# systemd unit for running the poller directly (no Docker).
+# Assumes the repo is cloned at /opt/umich-transit-mcp, `uv` is installed at
+# /usr/local/bin/uv, and a .env file exists in the repo root.
+#
+# Install:
+#   sudo cp deploy/umich-transit-poller.service /etc/systemd/system/
+#   sudo systemctl daemon-reload
+#   sudo systemctl enable --now umich-transit-poller
+#   journalctl -u umich-transit-poller -f      # watch logs
+[Unit]
+Description=U-Mich Transit poller (BusTime prediction logger + arrival detector)
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+WorkingDirectory=/opt/umich-transit-mcp
+EnvironmentFile=/opt/umich-transit-mcp/.env
+# One-time-safe startup: migrate + seed (idempotent) before the poller.
+ExecStartPre=/usr/local/bin/uv run alembic upgrade head
+ExecStart=/usr/local/bin/uv run umich-transit-poller
+Restart=always
+RestartSec=10
+
+[Install]
+WantedBy=multi-user.target

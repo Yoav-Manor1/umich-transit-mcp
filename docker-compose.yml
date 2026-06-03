@@ -1,0 +1,19 @@
+# 24/7 poller deployment. On the VPS:
+#   cp .env.example .env   # then set MBUS_API_KEY
+#   docker compose up -d --build
+#
+# `restart: unless-stopped` + Docker's own service being enabled means the
+# poller comes back automatically after a crash or a host reboot.
+services:
+  poller:
+    build: .
+    image: umich-transit-mcp
+    container_name: umich-transit-poller
+    restart: unless-stopped
+    env_file: .env
+    volumes:
+      # SQLite DB persists in a named volume across container rebuilds.
+      - transit-data:/app/data
+
+volumes:
+  transit-data:
