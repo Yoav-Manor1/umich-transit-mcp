@@ -1,6 +1,7 @@
 """Application configuration loaded from environment variables."""
 from pathlib import Path
 
+from pydantic import SecretStr
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
@@ -12,7 +13,7 @@ class Settings(BaseSettings):
     )
 
     mbus_base_url: str = "https://mbus.ltp.umich.edu"
-    mbus_api_key: str = ""
+    mbus_api_key: SecretStr = SecretStr("")
 
     database_url: str = "sqlite:///./data/transit.db"
 
@@ -28,11 +29,17 @@ class Settings(BaseSettings):
 
     @property
     def sqlite_path(self) -> Path | None:
-        """Return the SQLite file path if the URL is SQLite, else None."""
+        """Return the SQLite file path if the URL is a file-backed SQLite URL.
+
+        Returns None for non-SQLite URLs and for the in-memory database.
+        """
         prefix = "sqlite:///"
-        if self.database_url.startswith(prefix):
-            return Path(self.database_url[len(prefix):])
-        return None
+        if not self.database_url.startswith(prefix):
+            return None
+        remainder = self.database_url[len(prefix):]
+        if remainder == ":memory:":
+            return None
+        return Path(remainder)
 
 
 settings = Settings()
