@@ -1,0 +1,3 @@
+{"bustime-response": {"vehicle": [
+  {"vid": "5001", "tmstmp": "20260602 14:30", "lat": "42.27800", "lon": "-83.73500", "hdg": "45", "rt": "BB", "des": "Baits", "pid": 101, "pdist": 400, "dly": false, "spd": 22}
+]}}

@@ -1,0 +1,7 @@
+{"bustime-response": {"ptr": [
+  {"pid": 101, "ln": 5000.0, "rtdir": "Northbound", "pt": [
+    {"seq": 1, "lat": 42.27594, "lon": -83.73848, "typ": "S", "stpid": "1001", "stpnm": "Bursley Hall", "pdist": 0.0},
+    {"seq": 2, "lat": 42.28100, "lon": -83.73200, "typ": "W", "pdist": 800.0},
+    {"seq": 3, "lat": 42.29011, "lon": -83.71956, "typ": "S", "stpid": "1002", "stpnm": "Pierpont Commons", "pdist": 1600.0}
+  ]}
+]}}

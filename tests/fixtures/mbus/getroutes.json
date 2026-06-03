@@ -1,0 +1,5 @@
+{"bustime-response": {"routes": [
+  {"rt": "BB", "rtnm": "Bursley-Baits", "rtclr": "#00274c", "rtdd": "BB"},
+  {"rt": "CN", "rtnm": "Commuter North", "rtclr": "#ffcb05", "rtdd": "CN"},
+  {"rt": "NW", "rtnm": "Northwood", "rtclr": "#7a121c", "rtdd": "NW"}
+]}}

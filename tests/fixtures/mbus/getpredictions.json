@@ -1,0 +1,3 @@
+{"bustime-response": {"prd": [
+  {"tmstmp": "20260602 14:30", "typ": "A", "stpid": "1001", "stpnm": "Bursley Hall", "vid": "5001", "dstp": 1200, "rt": "BB", "rtdd": "BB", "rtdir": "Northbound", "des": "Baits", "prdtm": "20260602 14:35", "dly": false, "prdctdn": "5", "zone": ""}
+]}}
