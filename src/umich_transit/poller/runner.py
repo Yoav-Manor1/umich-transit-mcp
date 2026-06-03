@@ -61,9 +61,7 @@ async def _prediction_loop(engine: Engine, client: MbusClient) -> None:
     while True:
         try:
             stop_ids = _load_stop_ids(engine)
-            etas = []
-            for stop_id in stop_ids:
-                etas.extend(await client.get_etas(stop_id))
+            etas = await client.get_etas_for_stops(stop_ids)
             with session_scope(engine) as session:
                 inserted = log_predictions(session, etas)
             logger.info("prediction_loop.tick", stops=len(stop_ids), inserted=inserted)

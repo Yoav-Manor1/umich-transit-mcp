@@ -163,7 +163,7 @@ function init() {
   renderChips();
   refresh();
   if (refreshTimer) clearInterval(refreshTimer);
-  refreshTimer = setInterval(refresh, 20000);
+  refreshTimer = setInterval(refresh, 60000);
   window.addEventListener("focus", refresh);
 }
 
