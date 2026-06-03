@@ -28,6 +28,12 @@ class TZDateTime(TypeDecorator[datetime]):
     impl = DateTime(timezone=True)
     cache_ok = True
 
+    def process_bind_param(self, value: Any, dialect: Dialect) -> datetime | None:
+        dt: datetime | None = value
+        if dt is not None and dt.tzinfo is not None:
+            return dt.astimezone(UTC)
+        return dt
+
     def process_result_value(self, value: Any, dialect: Dialect) -> datetime | None:
         if value is None:
             return None

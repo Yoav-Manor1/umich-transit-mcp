@@ -43,7 +43,8 @@ def find_stops(
 ) -> list[Stop]:
     stmt = select(Stop)
     if query:
-        stmt = stmt.where(Stop.name.ilike(f"%{query}%"))
+        escaped = query.replace("\\", "\\\\").replace("%", "\\%").replace("_", "\\_")
+        stmt = stmt.where(Stop.name.ilike(f"%{escaped}%", escape="\\"))
     rows = list(session.execute(stmt).scalars().all())
     if near is not None:
         lat, lon = near

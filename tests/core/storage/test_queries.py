@@ -1,7 +1,8 @@
 """Tests for read-only query helpers used by the MCP service layer."""
-from datetime import UTC, datetime, timedelta
+from datetime import UTC, datetime, timedelta, timezone
 
 import pytest
+from sqlalchemy import select
 
 from umich_transit.core.storage import queries
 from umich_transit.core.storage.db import create_engine_for_url, session_scope
@@ -104,3 +105,34 @@ def test_prediction_before_arrival(engine):
         assert match is not None
         # The 305-sec-old one is outside the lookback; the 10-sec-old one is inside.
         assert (now - match.captured_at).total_seconds() == pytest.approx(10, abs=1)
+
+
+def test_prediction_for_arrival_returns_none_when_no_match(engine):
+    now = datetime.now(UTC)
+    with session_scope(engine) as s:
+        match = queries.prediction_for_arrival(
+            s, vehicle_id="ghost", stop_id="s1",
+            arrival_at=now, lookback_seconds=300,
+        )
+        assert match is None
+
+
+def test_find_stops_escapes_like_wildcards(engine):
+    # A literal underscore should match no real stop name (none contain "_"),
+    # proving "_" is not treated as a single-char wildcard.
+    with session_scope(engine) as s:
+        hits = queries.find_stops(s, query="_")
+        assert hits == []
+
+
+def test_tzdatetime_converts_aware_non_utc_to_utc(engine):
+    eastern = timezone(timedelta(hours=-5))
+    # 07:00 Eastern == 12:00 UTC, same instant
+    t = datetime(2024, 1, 15, 7, 0, 0, tzinfo=eastern)
+    with session_scope(engine) as s:
+        s.add(Arrival(route_id="r1", stop_id="s1", vehicle_id="v1",
+                      actual_arrival_at=t, detected_via="proximity"))
+    with session_scope(engine) as s:
+        got = s.execute(select(Arrival)).scalar_one().actual_arrival_at
+        assert got == t                       # same instant preserved
+        assert got.utcoffset() == timedelta(0)  # returned as UTC
