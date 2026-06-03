@@ -30,9 +30,9 @@ Five read-only MCP tools:
 
 Real-time transit predictions are optimistic. The published ETA assumes nominal
 conditions; the bus that's actually coming is subject to traffic, weather, and
-dwell time. Riders learn the patterns by hard experience ("the Bursley–Baits
-route always runs late on weekday evenings"). This server encodes that learning
-so an assistant can hand it to you directly.
+dwell time. Riders learn the patterns by hard experience ("Commuter North always runs late
+on weekday evenings"). This server encodes that learning so an assistant can
+hand it to you directly.
 
 ## Architecture
 
@@ -117,8 +117,9 @@ Connect it to Claude Desktop (`claude_desktop_config.json`):
 }
 ```
 
-Then ask Claude things like *"When's the next bus from Mason Hall, and is it
-usually on time right now?"* or *"Plan a trip from Bursley to Pierpont."*
+Then ask Claude things like *"When's the next Commuter North bus at the Central
+Campus Transit Center, and is it usually on time right now?"* or *"Plan a trip
+from Pierpont Commons to the Central Campus Transit Center."*
 
 ## Known limitations
 
