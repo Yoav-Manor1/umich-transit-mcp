@@ -1,6 +1,7 @@
 """SQLAlchemy ORM models. Seven tables: routes, stops, route_stops,
 predictions (high-volume), arrivals, reliability_stats (derived), parse_errors."""
-from datetime import datetime
+from datetime import UTC, datetime
+from typing import Any
 
 from sqlalchemy import (
     JSON,
@@ -12,7 +13,29 @@ from sqlalchemy import (
     PrimaryKeyConstraint,
     String,
 )
+from sqlalchemy.engine import Dialect
 from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column
+from sqlalchemy.types import TypeDecorator
+
+
+class TZDateTime(TypeDecorator[datetime]):
+    """DateTime that always returns timezone-aware UTC datetimes.
+
+    SQLite stores datetimes as strings and discards tzinfo on read.
+    This decorator re-attaches UTC when the value comes back naive.
+    """
+
+    impl = DateTime(timezone=True)
+    cache_ok = True
+
+    def process_result_value(self, value: Any, dialect: Dialect) -> datetime | None:
+        if value is None:
+            return None
+        if not isinstance(value, datetime):
+            raise TypeError(f"Expected datetime, got {type(value)!r}")
+        if value.tzinfo is None:
+            return value.replace(tzinfo=UTC)
+        return value
 
 
 class Base(DeclarativeBase):
@@ -27,7 +50,7 @@ class Route(Base):
     long_name: Mapped[str] = mapped_column(String, nullable=False)
     color: Mapped[str | None] = mapped_column(String, nullable=True)
     raw_json: Mapped[dict[str, object] | None] = mapped_column(JSON, nullable=True)
-    updated_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    updated_at: Mapped[datetime | None] = mapped_column(TZDateTime)
 
 
 class Stop(Base):
@@ -38,7 +61,7 @@ class Stop(Base):
     lat: Mapped[float] = mapped_column(Float, nullable=False)
     lon: Mapped[float] = mapped_column(Float, nullable=False)
     raw_json: Mapped[dict[str, object] | None] = mapped_column(JSON, nullable=True)
-    updated_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    updated_at: Mapped[datetime | None] = mapped_column(TZDateTime)
 
 
 class RouteStop(Base):
@@ -57,8 +80,8 @@ class Prediction(Base):
     route_id: Mapped[str] = mapped_column(ForeignKey("routes.id"), nullable=False)
     stop_id: Mapped[str] = mapped_column(ForeignKey("stops.id"), nullable=False)
     vehicle_id: Mapped[str] = mapped_column(String, nullable=False)
-    predicted_arrival_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
-    captured_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
+    predicted_arrival_at: Mapped[datetime] = mapped_column(TZDateTime, nullable=False)
+    captured_at: Mapped[datetime] = mapped_column(TZDateTime, nullable=False)
     __table_args__ = (
         Index("ix_predictions_stop_route_captured", "stop_id", "route_id", "captured_at"),
         Index("ix_predictions_vehicle_captured", "vehicle_id", "captured_at"),
@@ -71,7 +94,7 @@ class Arrival(Base):
     route_id: Mapped[str] = mapped_column(ForeignKey("routes.id"), nullable=False)
     stop_id: Mapped[str] = mapped_column(ForeignKey("stops.id"), nullable=False)
     vehicle_id: Mapped[str] = mapped_column(String, nullable=False)
-    actual_arrival_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
+    actual_arrival_at: Mapped[datetime] = mapped_column(TZDateTime, nullable=False)
     detected_via: Mapped[str] = mapped_column(String, nullable=False)  # "proximity" | "collapse"
     __table_args__ = (
         Index("ix_arrivals_vehicle_at", "vehicle_id", "actual_arrival_at"),
@@ -90,7 +113,7 @@ class ReliabilityStat(Base):
     p50_delay_s: Mapped[float] = mapped_column(Float, nullable=False)
     p90_delay_s: Mapped[float] = mapped_column(Float, nullable=False)
     sample_count: Mapped[int] = mapped_column(Integer, nullable=False)
-    updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
+    updated_at: Mapped[datetime] = mapped_column(TZDateTime, nullable=False)
     __table_args__ = (
         PrimaryKeyConstraint("route_id", "stop_id", "dow", "hour"),
     )
@@ -101,6 +124,6 @@ class ParseError(Base):
     __tablename__ = "parse_errors"
     id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
     source: Mapped[str] = mapped_column(String, nullable=False)  # "mbus.etas" etc
-    occurred_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
+    occurred_at: Mapped[datetime] = mapped_column(TZDateTime, nullable=False)
     error: Mapped[str] = mapped_column(String, nullable=False)
     raw: Mapped[dict[str, object] | None] = mapped_column(JSON, nullable=True)
