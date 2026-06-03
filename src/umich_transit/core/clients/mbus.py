@@ -35,9 +35,22 @@ class BusTimeError(RuntimeError):
     """A non-benign error returned by the BusTime API (e.g. bad/missing key)."""
 
 
-def _parse_ts(value: str, *, with_seconds: bool = False) -> datetime:
-    fmt = "%Y%m%d %H:%M:%S" if with_seconds else "%Y%m%d %H:%M"
-    return datetime.strptime(value, fmt).replace(tzinfo=AGENCY_TZ)
+def _parse_ts(value: str) -> datetime:
+    """Parse a BusTime local timestamp into an America/Detroit-aware datetime.
+
+    BusTime emits 'YYYYMMDD HH:MM' for predictions/vehicles and 'YYYYMMDD
+    HH:MM:SS' for other endpoints, so both are accepted. NOTE: during the
+    one-hour DST fall-back window these naive local times are ambiguous; we
+    resolve to fold=0 (the earlier, EDT occurrence), which can make a timestamp
+    in that window up to 1h early. This is an accepted limitation of BusTime's
+    naive-timestamp protocol — it cannot be disambiguated from the string alone.
+    """
+    for fmt in ("%Y%m%d %H:%M:%S", "%Y%m%d %H:%M"):
+        try:
+            return datetime.strptime(value, fmt).replace(tzinfo=AGENCY_TZ)
+        except ValueError:
+            continue
+    raise ValueError(f"Unrecognized BusTime timestamp: {value!r}")
 
 
 def _chunked(items: list[str], size: int) -> Iterator[list[str]]:
@@ -58,9 +71,9 @@ class MbusClient:
         body = resp.json().get("bustime-response", {})
         if "error" in body:
             msgs = [str(e.get("msg", "")) for e in body["error"]]
-            if all(m.startswith(_BENIGN_ERROR_PREFIXES) for m in msgs):
+            if msgs and all(m.startswith(_BENIGN_ERROR_PREFIXES) for m in msgs):
                 return {}
-            raise BusTimeError("; ".join(msgs))
+            raise BusTimeError("; ".join(msgs) or "BusTime returned an empty error array")
         return body
 
     async def get_routes(self) -> list[RouteRecord]:

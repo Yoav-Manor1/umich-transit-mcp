@@ -6,7 +6,7 @@ import httpx
 import pytest
 import respx
 
-from umich_transit.core.clients.mbus import BusTimeError, MbusClient
+from umich_transit.core.clients.mbus import BusTimeError, MbusClient, _parse_ts
 
 FIXTURES = Path(__file__).parents[2] / "fixtures" / "mbus"
 BASE = "https://mbus.example.test/bustime/api/v3"
@@ -17,12 +17,13 @@ def _load(name: str) -> str:
 
 
 @pytest.fixture
-def client():
-    return MbusClient(
-        base_url="https://mbus.example.test",
-        api_key="testkey",
-        http=httpx.AsyncClient(),
-    )
+async def client():
+    async with httpx.AsyncClient() as http:
+        yield MbusClient(
+            base_url="https://mbus.example.test",
+            api_key="testkey",
+            http=http,
+        )
 
 
 @respx.mock
@@ -105,3 +106,18 @@ async def test_get_etas_raises_on_5xx(client):
         return_value=httpx.Response(503))
     with pytest.raises(httpx.HTTPStatusError):
         await client.get_etas(stop_id="1001")
+
+
+def test_parse_ts_accepts_minute_and_second_formats():
+    a = _parse_ts("20260602 14:35")
+    b = _parse_ts("20260602 14:35:30")
+    assert a.hour == 14 and a.minute == 35 and a.tzinfo is not None
+    assert b.hour == 14 and b.minute == 35 and b.second == 30 and b.tzinfo is not None
+
+
+@respx.mock
+async def test_empty_error_array_raises(client):
+    respx.get(url__startswith=BASE + "/getroutes").mock(
+        return_value=httpx.Response(200, text='{"bustime-response": {"error": []}}'))
+    with pytest.raises(BusTimeError):
+        await client.get_routes()
