@@ -7,14 +7,17 @@ client on shutdown.
 """
 from collections.abc import AsyncIterator
 from contextlib import asynccontextmanager
+from datetime import UTC, datetime
+from typing import Any
 
 import httpx
-from fastapi import FastAPI
+from fastapi import FastAPI, Request
 
 from umich_transit.config import settings
-from umich_transit.core.clients.mbus import MbusClient
+from umich_transit.core.clients.mbus import BusTimeError, MbusClient
 from umich_transit.core.service import TransitService
 from umich_transit.core.storage.db import create_engine_for_url
+from umich_transit.web.leave import compute_leave
 
 
 def build_app(svc: TransitService | None = None) -> FastAPI:
@@ -44,5 +47,30 @@ def build_app(svc: TransitService | None = None) -> FastAPI:
     @app.get("/api/health")
     def health() -> dict[str, str]:
         return {"status": "ok"}
+
+    @app.get("/api/stops/search")
+    def search_stops(request: Request, q: str = "", limit: int = 8) -> dict[str, Any]:
+        svc: TransitService = request.app.state.svc
+        return {"stops": svc.find_stops(query=q, limit=limit)}
+
+    @app.get("/api/arrivals")
+    async def arrivals(
+        request: Request, stop_id: str, walk_min: int = 5, limit: int = 5
+    ) -> dict[str, Any]:
+        svc: TransitService = request.app.state.svc
+        now = datetime.now(UTC)
+        try:
+            items = await svc.get_arrivals(stop_id=stop_id, limit=limit)
+        except (httpx.HTTPError, BusTimeError):
+            return {
+                "stop_id": stop_id, "now": now.isoformat(),
+                "arrivals": [], "leave": None, "error": "upstream",
+            }
+        return {
+            "stop_id": stop_id,
+            "now": now.isoformat(),
+            "arrivals": items,
+            "leave": compute_leave(items, walk_min, now),
+        }
 
     return app
