@@ -34,3 +34,13 @@ def test_session_scope_rolls_back_on_error():
     with session_scope(engine) as session:
         count = session.execute(text("SELECT COUNT(*) FROM foo")).scalar()
         assert count == 0
+
+
+def test_file_backed_sqlite_enables_wal_and_foreign_keys(tmp_path):
+    db_file = tmp_path / "test.db"
+    engine = create_engine_for_url(f"sqlite:///{db_file}")
+    with engine.connect() as conn:
+        mode = conn.execute(text("PRAGMA journal_mode")).scalar()
+        fk = conn.execute(text("PRAGMA foreign_keys")).scalar()
+    assert mode == "wal"
+    assert fk == 1
