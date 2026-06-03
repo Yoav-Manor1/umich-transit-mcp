@@ -4,8 +4,11 @@ Pure functions over numeric delays; no I/O. The nightly batch job calls these
 against query results.
 """
 from dataclasses import dataclass
-from datetime import datetime
+from datetime import UTC, datetime
 from statistics import mean
+from zoneinfo import ZoneInfo
+
+AGENCY_TZ = ZoneInfo("America/Detroit")
 
 
 @dataclass(frozen=True)
@@ -17,7 +20,15 @@ class BinKey:
 
     @classmethod
     def from_timestamp(cls, *, route_id: str, stop_id: str, at: datetime) -> "BinKey":
-        return cls(route_id=route_id, stop_id=stop_id, dow=at.weekday(), hour=at.hour)
+        """Bin a timestamp by AGENCY-LOCAL (America/Detroit) day-of-week and hour.
+
+        Naive datetimes are assumed UTC. Localizing here (rather than at call
+        sites) guarantees the stats job and the live lookup use identical bins.
+        """
+        if at.tzinfo is None:
+            at = at.replace(tzinfo=UTC)
+        local = at.astimezone(AGENCY_TZ)
+        return cls(route_id=route_id, stop_id=stop_id, dow=local.weekday(), hour=local.hour)
 
 
 @dataclass(frozen=True)

@@ -46,9 +46,22 @@ def test_compute_bin_stats_rejects_empty():
         compute_bin_stats([], on_time_threshold_s=120)
 
 
-def test_bin_key_from_timestamp():
-    # Friday 14:00 UTC -> dow=4, hour=14
+def test_bin_key_uses_local_time():
+    # 14:30 UTC on Fri May 1 2026 is 10:30 EDT (UTC-4) -> hour 10, still Friday
     ts = datetime(2026, 5, 1, 14, 30, tzinfo=UTC)
     key = BinKey.from_timestamp(route_id="r1", stop_id="s1", at=ts)
-    assert key.dow == 4 and key.hour == 14
+    assert key.dow == 4 and key.hour == 10
     assert key.route_id == "r1"
+
+
+def test_bin_key_evening_rolls_to_local_day():
+    # 01:30 UTC Sat is 21:30 EDT Fri -> dow=4 (Friday), hour=21
+    ts = datetime(2026, 5, 2, 1, 30, tzinfo=UTC)
+    key = BinKey.from_timestamp(route_id="r1", stop_id="s1", at=ts)
+    assert key.dow == 4 and key.hour == 21
+
+
+def test_bin_key_naive_treated_as_utc():
+    naive = datetime(2026, 5, 1, 14, 30)  # no tzinfo
+    key = BinKey.from_timestamp(route_id="r1", stop_id="s1", at=naive)
+    assert key.hour == 10  # treated as UTC then localized
