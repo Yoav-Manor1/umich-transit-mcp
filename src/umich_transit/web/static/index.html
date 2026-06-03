@@ -1,0 +1,47 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>U-M Buses</title>
+  <link rel="stylesheet" href="/static/style.css">
+</head>
+<body>
+  <div class="app">
+    <header class="topbar">
+      <span class="brand">🚌 U-M Buses</span>
+      <span id="updated" class="updated"></span>
+    </header>
+
+    <div class="search-wrap">
+      <input id="search" class="search" autocomplete="off"
+             placeholder="Search a stop to add… (e.g. Pierpont)">
+      <div id="results" class="results"></div>
+    </div>
+
+    <div id="chips" class="chips"></div>
+    <div id="note" class="note" style="display:none"></div>
+
+    <div id="empty" class="empty" style="display:none">
+      <p>No stops yet.<br>Search above to add your first stop.</p>
+    </div>
+
+    <div id="board" class="board" style="display:none">
+      <div class="stop-head">
+        <span id="stop-name" class="stop-name"></span>
+        <span id="walk-label" class="walk"></span>
+      </div>
+      <div id="banner" class="banner" style="display:none">
+        <span class="banner-ico">⏱️</span>
+        <div>
+          <div class="banner-main"></div>
+          <div class="banner-sub"></div>
+        </div>
+      </div>
+      <div id="arrivals" class="arrivals"></div>
+      <div class="foot">↻ Auto-updates every 20 sec</div>
+    </div>
+  </div>
+  <script src="/static/app.js"></script>
+</body>
+</html>

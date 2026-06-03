@@ -8,16 +8,21 @@ client on shutdown.
 from collections.abc import AsyncIterator
 from contextlib import asynccontextmanager
 from datetime import UTC, datetime
+from pathlib import Path
 from typing import Any
 
 import httpx
 from fastapi import FastAPI, Request
+from fastapi.responses import FileResponse
+from fastapi.staticfiles import StaticFiles
 
 from umich_transit.config import settings
 from umich_transit.core.clients.mbus import BusTimeError, MbusClient
 from umich_transit.core.service import TransitService
 from umich_transit.core.storage.db import create_engine_for_url
 from umich_transit.web.leave import compute_leave
+
+STATIC_DIR = Path(__file__).resolve().parent / "static"
 
 
 def build_app(svc: TransitService | None = None) -> FastAPI:
@@ -72,5 +77,11 @@ def build_app(svc: TransitService | None = None) -> FastAPI:
             "arrivals": items,
             "leave": compute_leave(items, walk_min, now),
         }
+
+    app.mount("/static", StaticFiles(directory=STATIC_DIR), name="static")
+
+    @app.get("/")
+    def index() -> FileResponse:
+        return FileResponse(STATIC_DIR / "index.html")
 
     return app
