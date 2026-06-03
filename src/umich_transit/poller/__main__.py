@@ -22,7 +22,11 @@ def main() -> None:
             structlog.processors.JSONRenderer(),
         ],
     )
-    asyncio.run(run())
+    log = structlog.get_logger(__name__)
+    try:
+        asyncio.run(run())
+    except KeyboardInterrupt:
+        log.info("poller.stopped")  # clean exit on Ctrl+C, no traceback
 
 
 if __name__ == "__main__":
