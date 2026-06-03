@@ -41,6 +41,7 @@ packages = ["src/umich_transit"]
 [tool.ruff]
 line-length = 100
 target-version = "py311"
+extend-exclude = ["src/umich_transit/core/storage/migrations/"]
 
 [tool.ruff.lint]
 select = ["E", "F", "I", "B", "UP", "N"]
@@ -49,6 +50,7 @@ select = ["E", "F", "I", "B", "UP", "N"]
 python_version = "3.11"
 strict = true
 ignore_missing_imports = true
+exclude = ["src/umich_transit/core/storage/migrations/"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
