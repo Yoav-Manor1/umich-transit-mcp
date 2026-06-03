@@ -28,8 +28,8 @@ def test_compute_bin_stats_basic():
     assert s.mean_delay_s == pytest.approx(210.0)
     # On-time = |delay| <= 120 -> delays -60, 0, 60, 120 -> 4 of 10
     assert s.on_time_pct == pytest.approx(0.4)
-    assert s.p50_delay_s == pytest.approx(210.0, abs=30)  # median
-    assert s.p90_delay_s == pytest.approx(444.0, abs=20)
+    assert s.p50_delay_s == pytest.approx(210.0, abs=1)  # median, linear interp
+    assert s.p90_delay_s == pytest.approx(426.0, abs=1)  # 420*0.9 + 480*0.1
 
 
 def test_compute_bin_stats_handles_single_sample():
