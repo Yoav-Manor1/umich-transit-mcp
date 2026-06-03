@@ -8,6 +8,7 @@ from umich_transit.core.storage.db import create_engine_for_url, session_scope
 from umich_transit.core.storage.models import (
     Arrival,
     Base,
+    ParseError,
     Prediction,
     ReliabilityStat,
     Route,
@@ -74,3 +75,16 @@ def test_reliability_stat_unique_per_bin(engine):
         stat = s.execute(select(ReliabilityStat)).scalar_one()
         assert stat.on_time_pct == 0.75
         assert stat.sample_count == 42
+
+
+def test_parse_error_insert_and_query(engine):
+    now = datetime.now(UTC)
+    with session_scope(engine) as s:
+        s.add(ParseError(
+            source="mbus.etas", occurred_at=now,
+            error="boom", raw={"bad": "payload"},
+        ))
+    with session_scope(engine) as s:
+        pe = s.execute(select(ParseError)).scalar_one()
+        assert pe.source == "mbus.etas"
+        assert pe.raw == {"bad": "payload"}

@@ -93,7 +93,6 @@ class ReliabilityStat(Base):
     updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
     __table_args__ = (
         PrimaryKeyConstraint("route_id", "stop_id", "dow", "hour"),
-        Index("ix_reliability_lookup", "route_id", "stop_id", "dow", "hour"),
     )
 
 
