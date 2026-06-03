@@ -17,6 +17,7 @@ build/
 # Project
 .env
 data/
+.superpowers/
 *.db
 *.db-journal
 *.db-wal
