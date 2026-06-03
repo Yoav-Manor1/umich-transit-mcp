@@ -69,11 +69,18 @@ class MbusClient:
         resp = await self._http.get(self._base + endpoint, params=query)
         resp.raise_for_status()
         body = resp.json().get("bustime-response", {})
-        if "error" in body:
-            msgs = [str(e.get("msg", "")) for e in body["error"]]
-            if msgs and all(m.startswith(_BENIGN_ERROR_PREFIXES) for m in msgs):
-                return {}
-            raise BusTimeError("; ".join(msgs) or "BusTime returned an empty error array")
+        errors = body.get("error")
+        if errors is not None:
+            msgs = [str(e.get("msg", "")) for e in errors]
+            non_benign = [m for m in msgs if not m.startswith(_BENIGN_ERROR_PREFIXES)]
+            if non_benign or not msgs:
+                raise BusTimeError(
+                    "; ".join(msgs) or "BusTime returned an empty error array"
+                )
+            # All errors are benign per-route/stop "no data" notes. BusTime can
+            # still include real data alongside them (e.g. getvehicles across
+            # several routes), so fall through and return the full body rather
+            # than discarding it.
         return body
 
     async def get_routes(self) -> list[RouteRecord]:

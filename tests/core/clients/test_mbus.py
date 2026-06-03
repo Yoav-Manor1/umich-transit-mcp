@@ -63,6 +63,18 @@ async def test_get_vehicle_positions_parses_fixture(client):
 
 
 @respx.mock
+async def test_get_vehicle_positions_parses_mixed_data_and_error(client):
+    # BusTime returns a `vehicle` array for active routes AND a benign
+    # "No data found for parameter" error for routes with none, in the SAME
+    # response. The client must keep the vehicles, not discard the whole body.
+    respx.get(url__startswith=BASE + "/getvehicles").mock(
+        return_value=httpx.Response(200, text=_load("getvehicles_mixed.json")))
+    vehicles = await client.get_vehicle_positions(["CN", "WX"])
+    assert [v.id for v in vehicles] == ["3064"]
+    assert vehicles[0].route_id == "CN"
+
+
+@respx.mock
 async def test_get_vehicle_positions_empty_route_list_skips_call(client):
     vehicles = await client.get_vehicle_positions([])
     assert vehicles == []

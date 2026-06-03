@@ -1,0 +1,1 @@
+{"bustime-response": {"vehicle": [{"vid": "3064", "tmstmp": "20260603 12:09", "lat": "42.26436", "lon": "-83.74445", "hdg": "83", "rt": "CN", "des": "Glazier Way", "spd": 0}], "error": [{"rt": "WX", "msg": "No data found for parameter"}]}}
