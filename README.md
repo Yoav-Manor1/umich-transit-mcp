@@ -123,6 +123,20 @@ Then ask Claude things like *"When's the next Commuter North bus at the Central
 Campus Transit Center, and is it usually on time right now?"* or *"Plan a trip
 from Pierpont Commons to the Central Campus Transit Center."*
 
+## Web dashboard (see it yourself, no chat)
+
+Prefer a page you just glance at instead of asking Claude? Run the local
+dashboard:
+
+```bash
+uv run umich-transit-web        # opens http://localhost:8000 in your browser
+```
+
+Search for a stop, save a few favorites, and the page shows live arrivals with a
+green **"when to leave"** banner (set your walk time per stop). It reuses the same
+`core/` service as the MCP tools and reads the same database the poller fills, so
+its confidence ratings improve exactly as the historical data grows.
+
 ## Running it 24/7
 
 For continuous data collection, run the poller on an always-on host instead of
