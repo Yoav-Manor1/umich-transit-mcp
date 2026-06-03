@@ -7,8 +7,10 @@ infers actual arrivals from live GPS, and learns the gap between the two.
 > "Magic Bus says 4 minutes. The bus shows up in 12.
 > This server learns from that gap and tells you the difference."
 
+<!-- TODO: record a ~20s GIF of Claude using get_arrivals / plan_trip, save it as
+     screenshots/demo.gif, and uncomment the next line:
 ![demo](screenshots/demo.gif)
-<!-- Record a ~20s GIF of Claude calling get_arrivals / plan_trip and save it here. -->
+-->
 
 ![Python](https://img.shields.io/badge/python-3.11+-blue)
 ![Tests](https://img.shields.io/badge/tests-73%20passing-brightgreen)
