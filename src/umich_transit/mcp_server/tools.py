@@ -72,3 +72,10 @@ def route_reliability_tool(
     """Reliability stats for a route (on-time %, mean delay, samples).
     day_of_week: 0=Mon..6=Sun; hour: 0..23."""
     return svc.route_reliability(route_id=route_id, day_of_week=day_of_week, hour=hour)
+
+
+async def plan_trip_tool(
+    svc: TransitService, from_stop_id: str, to_stop_id: str,
+) -> dict[str, Any]:
+    """Plan a single-route bus trip from one stop to another (v1: no transfers)."""
+    return await svc.plan_trip(from_stop_id=from_stop_id, to_stop_id=to_stop_id)

@@ -10,9 +10,10 @@ from typing import Any
 from sqlalchemy import Engine, select
 
 from umich_transit.core.clients.mbus import MbusClient
+from umich_transit.core.planner import TripPlanner
 from umich_transit.core.reliability import BinKey
 from umich_transit.core.storage.db import session_scope
-from umich_transit.core.storage.models import ReliabilityStat
+from umich_transit.core.storage.models import ReliabilityStat, RouteStop
 from umich_transit.core.storage.queries import (
     find_stops as q_find_stops,
 )
@@ -101,6 +102,44 @@ class TransitService:
                     "confidence": confidence,
                 })
         return out
+
+    async def plan_trip(
+        self, *, from_stop_id: str, to_stop_id: str,
+    ) -> dict[str, Any]:
+        with session_scope(self._engine) as session:
+            rs_rows = list(session.execute(select(RouteStop)).scalars().all())
+        route_stops: dict[str, list[str]] = {}
+        stop_to_routes: dict[str, list[str]] = {}
+        for rs in rs_rows:
+            route_stops.setdefault(rs.route_id, []).append(rs.stop_id)
+            stop_to_routes.setdefault(rs.stop_id, []).append(rs.route_id)
+
+        upcoming = await self.get_arrivals(stop_id=from_stop_id)
+        planner = TripPlanner(route_stops=route_stops, stop_to_routes=stop_to_routes)
+        plan = planner.plan(
+            from_stop_id=from_stop_id, to_stop_id=to_stop_id,
+            upcoming_arrivals=upcoming,
+        )
+        if plan is None:
+            return {"summary": "No same-route trip available.", "plan": None}
+        seg = plan.segments[0]
+        return {
+            "summary": (
+                f"Take route {seg.route_id} (vehicle {seg.vehicle_id}) "
+                f"from {seg.from_stop_id} to {seg.to_stop_id}"
+            ),
+            "plan": {
+                "segments": [{
+                    "mode": seg.mode,
+                    "route_id": seg.route_id,
+                    "vehicle_id": seg.vehicle_id,
+                    "from_stop_id": seg.from_stop_id,
+                    "to_stop_id": seg.to_stop_id,
+                    "board_at": seg.board_at.isoformat(),
+                    "adjusted_arrival_at": seg.adjusted_arrival_at.isoformat(),
+                }],
+            },
+        }
 
     def route_reliability(
         self,

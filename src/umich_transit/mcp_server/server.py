@@ -61,6 +61,12 @@ def build_server() -> tuple[FastMCP, AsyncExitStack]:
             svc, route_id=route_id, day_of_week=day_of_week, hour=hour
         )
 
+    @mcp.tool()
+    async def plan_trip(from_stop_id: str, to_stop_id: str) -> dict[str, Any]:
+        """Plan a single-route bus trip from one stop to another (reliability-aware,
+        soonest option). Returns plan=null if no single route connects the stops."""
+        return await tools.plan_trip_tool(svc, from_stop_id=from_stop_id, to_stop_id=to_stop_id)
+
     async def _close_http() -> None:
         await http.aclose()
 

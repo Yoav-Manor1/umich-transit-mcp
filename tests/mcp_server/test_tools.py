@@ -79,3 +79,14 @@ def test_route_reliability_tool():
     }
     result = tools.route_reliability_tool(svc, route_id="r1", day_of_week=None, hour=None)
     assert result["sample_count"] == 200
+
+
+def test_plan_trip_tool():
+    svc = MagicMock()
+    svc.plan_trip = AsyncMock(return_value={
+        "summary": "Take route r1 (vehicle v1) from s1 to s2",
+        "plan": {"segments": [{"route_id": "r1"}]},
+    })
+    result = asyncio.run(tools.plan_trip_tool(svc, from_stop_id="s1", to_stop_id="s2"))
+    assert "r1" in result["summary"]
+    assert result["plan"]["segments"][0]["route_id"] == "r1"
