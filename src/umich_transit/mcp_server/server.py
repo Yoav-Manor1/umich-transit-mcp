@@ -12,20 +12,26 @@ from umich_transit.core.storage.db import create_engine_for_url
 from umich_transit.mcp_server import tools
 
 
-def build_server() -> tuple[FastMCP, AsyncExitStack]:
+def build_server(svc: TransitService | None = None) -> tuple[FastMCP, AsyncExitStack]:
     """Construct the MCP server and an AsyncExitStack the caller must enter at
     startup and exit at shutdown (closes the shared httpx client)."""
     mcp: FastMCP = FastMCP("umich-transit")
     stack = AsyncExitStack()
 
-    engine = create_engine_for_url(settings.database_url)
-    http = httpx.AsyncClient(timeout=15.0)
-    mbus = MbusClient(
-        base_url=settings.mbus_base_url,
-        api_key=settings.mbus_api_key.get_secret_value(),
-        http=http,
-    )
-    svc = TransitService(engine=engine, mbus=mbus)
+    if svc is None:
+        engine = create_engine_for_url(settings.database_url)
+        http = httpx.AsyncClient(timeout=15.0)
+        mbus = MbusClient(
+            base_url=settings.mbus_base_url,
+            api_key=settings.mbus_api_key.get_secret_value(),
+            http=http,
+        )
+        svc = TransitService(engine=engine, mbus=mbus)
+
+        async def _close_http() -> None:
+            await http.aclose()
+
+        stack.push_async_callback(_close_http)
 
     @mcp.tool()
     def list_routes(agency: str | None = None) -> dict[str, Any]:
@@ -62,14 +68,8 @@ def build_server() -> tuple[FastMCP, AsyncExitStack]:
         )
 
     @mcp.tool()
-    async def plan_trip(from_stop_id: str, to_stop_id: str) -> dict[str, Any]:
-        """Plan a single-route bus trip from one stop to another (reliability-aware,
-        soonest option). Returns plan=null if no single route connects the stops."""
-        return await tools.plan_trip_tool(svc, from_stop_id=from_stop_id, to_stop_id=to_stop_id)
-
-    async def _close_http() -> None:
-        await http.aclose()
-
-    stack.push_async_callback(_close_http)
+    def prediction_accuracy(route_id: str | None = None) -> dict[str, Any]:
+        """Compare published and adjusted ETA error on chronologically held-out data."""
+        return tools.prediction_accuracy_tool(svc, route_id=route_id)
 
     return mcp, stack

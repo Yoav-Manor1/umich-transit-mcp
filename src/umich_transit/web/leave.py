@@ -12,7 +12,11 @@ from typing import Any
 def _effective_eta(item: dict[str, Any]) -> datetime:
     """Use the adjusted ETA only when we trust it (high confidence), else the
     published one — the same convention as mcp_server/tools.get_arrivals_tool."""
-    key = "adjusted_arrival_at" if item.get("confidence") == "high" else "predicted_arrival_at"
+    key = (
+        "adjusted_arrival_at"
+        if item.get("confidence") in {"high", "medium"}
+        else "predicted_arrival_at"
+    )
     eta = item[key]
     assert isinstance(eta, datetime)
     return eta

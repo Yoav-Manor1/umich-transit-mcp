@@ -80,24 +80,23 @@ def arrivals_in_window(
 
 
 def prediction_for_arrival(
-    session: Session, *, vehicle_id: str, stop_id: str,
-    arrival_at: datetime, lookback_seconds: int,
+    session: Session, *, vehicle_id: str, route_id: str, stop_id: str,
+    arrival_at: datetime, target_horizon_seconds: int,
+    tolerance_seconds: int,
 ) -> Prediction | None:
-    """Find the prediction captured ~lookback_seconds before the arrival.
-
-    Returns the most recent prediction within the window
-    [arrival_at - lookback_seconds, arrival_at].
-    """
-    window_start = arrival_at - timedelta(seconds=lookback_seconds)
-    stmt = (
-        select(Prediction)
-        .where(
-            Prediction.vehicle_id == vehicle_id,
-            Prediction.stop_id == stop_id,
-            Prediction.captured_at >= window_start,
-            Prediction.captured_at <= arrival_at,
-        )
-        .order_by(Prediction.captured_at.desc())
-        .limit(1)
+    """Find the prediction captured closest to a fixed pre-arrival horizon."""
+    target = arrival_at - timedelta(seconds=target_horizon_seconds)
+    window_start = target - timedelta(seconds=tolerance_seconds)
+    window_end = target + timedelta(seconds=tolerance_seconds)
+    stmt = select(Prediction).where(
+        Prediction.vehicle_id == vehicle_id,
+        Prediction.route_id == route_id,
+        Prediction.stop_id == stop_id,
+        Prediction.captured_at >= window_start,
+        Prediction.captured_at <= window_end,
+        Prediction.predicted_arrival_at >= Prediction.captured_at,
     )
-    return session.execute(stmt).scalar_one_or_none()
+    candidates = list(session.execute(stmt).scalars().all())
+    if not candidates:
+        return None
+    return min(candidates, key=lambda p: (abs(p.captured_at - target), p.captured_at))

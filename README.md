@@ -1,206 +1,202 @@
-# U-Mich Transit MCP Server
+# U-Mich Transit Intelligence
 
-An MCP server that gives Claude *honest* answers about University of Michigan
-buses. It doesn't just relay the Magic Bus arrival predictions — it logs them,
-infers actual arrivals from live GPS, and learns the gap between the two.
+Magic Bus tells you when a bus *should* arrive. This project measures when it
+actually arrives, learns recurring prediction bias, and only adjusts an ETA when
+the historical evidence is strong enough.
 
-> "Magic Bus says 4 minutes. The bus shows up in 12.
-> This server learns from that gap and tells you the difference."
+> Magic Bus said four minutes. Historical evidence suggested nine. The bus
+> arrived in ten.
 
-<!-- TODO: record a ~20s GIF of Claude using get_arrivals / plan_trip, save it as
-     screenshots/demo.gif, and uncomment the next line:
-![demo](screenshots/demo.gif)
--->
+The same transparent reliability engine powers a polished local dashboard and
+five read-only MCP tools. A chronological holdout report shows whether the
+adjustment really helps; negative results are reported rather than hidden.
 
 ![Python](https://img.shields.io/badge/python-3.11+-blue)
-![Tests](https://img.shields.io/badge/tests-73%20passing-brightgreen)
+![Tests](https://img.shields.io/badge/tests-pytest-brightgreen)
 ![License](https://img.shields.io/badge/license-MIT-green)
 
-## What it does
+## Try the complete showcase
 
-Five read-only MCP tools:
-
-| Tool | What it answers |
-|------|-----------------|
-| `list_routes` | What routes exist (filter by agency) |
-| `find_stops` | Find a stop by name, or the nearest stops to a coordinate |
-| `get_arrivals` | **The headline.** Upcoming arrivals at a stop with both the *published* ETA and a *reliability-adjusted* ETA, plus a confidence level |
-| `route_reliability` | On-time %, mean delay, and sample count for a route |
-| `plan_trip` | Soonest single-route trip between two stops, ranked by reliability-adjusted arrival |
-
-## The problem
-
-Real-time transit predictions are optimistic. The published ETA assumes nominal
-conditions; the bus that's actually coming is subject to traffic, weather, and
-dwell time. Riders learn the patterns by hard experience ("Commuter North always runs late
-on weekday evenings"). This server encodes that learning so an assistant can
-hand it to you directly.
-
-## Architecture
-
-Two long-running processes share a database; a core library holds all the logic
-so the same code can later back an HTTP API and a web dashboard.
-
-```
-┌────────────────┐     ┌────────────────┐     ┌─────────────────────┐
-│  MCP Server    │     │  HTTP API      │     │  Next.js dashboard  │
-│  (5 tools)     │     │  (planned)     │     │  (planned)          │
-└───────┬────────┘     └───────┬────────┘     └──────────┬──────────┘
-        │                      │                         │
-        ▼                      ▼                         ▼
-┌──────────────────────────────────────────┐
-│  umich_transit.core                      │
-│  clients · storage · reliability ·       │
-│  planner · service                       │
-└───────────────────┬──────────────────────┘
-                    ▼
-┌──────────────────────────────────────────┐
-│  SQLite (WAL)  →  Postgres for the app    │
-└───────────────────▲──────────────────────┘
-                    │
-┌───────────────────┴──────────────────────┐
-│  Background poller                        │
-│   • prediction logger   (every 30s)       │
-│   • arrival detector    (every 15s)       │
-│   • nightly stats recompute               │
-└──────────────────────────────────────────┘
-```
-
-The MCP server is stateless and launched on demand by a Claude client. The
-poller runs continuously to build the historical dataset. They never call each
-other — the SQLite database is the only seam.
-
-## How reliability scoring works
-
-1. **Log predictions.** Every 30s the poller pulls arrival predictions from the
-   BusTime API and stores `(route, stop, vehicle, predicted_time, captured_at)`.
-2. **Detect real arrivals.** Every 15s it reads live vehicle GPS and infers
-   arrivals with a hysteresis state machine: a bus entering 30m of a stop is an
-   arrival; it must leave 50m before it can re-trigger. Hysteresis absorbs GPS
-   jitter so a bus idling near a stop isn't counted twice.
-3. **Grade the predictions.** Nightly, each detected arrival is matched to the
-   prediction made ~5 minutes earlier (when a rider would actually have checked),
-   and the signed delay is bucketed by route, stop, **local** day-of-week, and
-   hour.
-4. **Serve honest ETAs.** `get_arrivals` adds the historical mean delay for the
-   current bin to the live prediction, and reports `confidence: high` once a bin
-   has ≥ 50 samples (otherwise `low`, with no adjustment).
-
-## Quickstart
-
-You need a free **BusTime API key** for Magic Bus. Register a developer account
-via the Magic Bus developer portal (linked from `mbus.ltp.umich.edu`) and copy
-your key.
+No API key or live bus service is required:
 
 ```bash
-git clone <your-repo-url> umich-transit-mcp
-cd umich-transit-mcp
 uv sync --all-extras
-
-cp .env.example .env
-# edit .env and set MBUS_API_KEY=<your key>
-
-uv run alembic upgrade head          # create the database schema
-uv run python scripts/seed_static_data.py   # load routes, stops, route_stops
-uv run python -m umich_transit.poller        # run continuously (own terminal)
+uv run umich-transit-demo
 ```
 
-Connect it to Claude Desktop (`claude_desktop_config.json`):
+This creates a separate `data/demo-transit.db`, opens
+`http://127.0.0.1:8000`, and clearly labels the synthetic-but-realistic demo
+data. Search for **Central Campus Transit Center**, **Pierpont Commons**, or
+**Bursley Hall**, then switch to **Accuracy proof** to see the held-out
+evaluation.
+
+For the same deterministic evidence through MCP, configure your client to run
+`uv run umich-transit-demo-mcp`. It uses its own
+`data/demo-transit-mcp.db`, so the conversational and dashboard demos remain
+isolated from live observations.
+
+The demo timeline is shifted relative to startup, so arrivals stay upcoming
+while historical intervals and expected metrics remain deterministic. Demo data
+never touches the live database.
+
+## What makes the result credible
+
+1. **Capture predictions.** The poller batches Magic Bus predictions every 120
+   seconds and retains their capture time.
+2. **Infer arrivals.** Vehicle GPS is sampled every 30 seconds. Entering within
+   30 metres of a route stop emits an arrival; the vehicle must leave 50 metres
+   before it can trigger again.
+3. **Grade one rider decision point.** Each arrival is matched to the eligible
+   prediction closest to five minutes beforehand, within a ±90-second tolerance.
+   Predictions cannot be reused.
+4. **Learn explainable bias.** The correction is a clamped median signed error.
+   It tries route + stop + weekday + hour first, then two broader route-level
+   fallbacks. High confidence requires 30 exact samples; medium requires 20
+   fallback samples; low confidence leaves the published ETA unchanged.
+5. **Test on the future.** The oldest 80% of outcomes trains frozen profiles;
+   the newest 20% is held out. Published and adjusted mean/median absolute
+   error, bias, and within-two-minutes rate are reported overall and for routes
+   with at least 20 held-out arrivals.
+
+All time buckets use `America/Detroit`. The matching rule, model, thresholds,
+and report versions are visible in stored derived artifacts and API responses.
+
+## Product surfaces
+
+### Dashboard
+
+```bash
+uv run umich-transit-web
+```
+
+The mobile-friendly page has two views:
+
+- **Live board:** stop search, browser-local favorites, per-stop walk time,
+  when-to-leave guidance, published versus adjusted ETA, confidence,
+  explanation, and stale-feed status.
+- **Accuracy proof:** overall and route-level held-out results plus the visible
+  80/20 methodology.
+
+If Magic Bus fails, the browser keeps the last good board and shows a retry
+notice instead of replacing useful information with an empty state.
+
+### MCP
+
+| Tool | Purpose |
+|---|---|
+| `list_routes` | List seeded routes, optionally by agency |
+| `find_stops` | Search stops by name or proximity |
+| `get_arrivals` | Live published and evidence-adjusted ETAs with explanations |
+| `route_reliability` | Historical on-time rate and delay summary |
+| `prediction_accuracy` | Held-out published-versus-adjusted accuracy, optionally by route |
+
+The earlier approximate trip planner is intentionally not registered: it did
+not validate direction or calculate travel time, so exposing it would overstate
+what the project can do.
+
+Claude Desktop configuration:
 
 ```json
 {
   "mcpServers": {
     "umich-transit": {
       "command": "uv",
-      "args": ["run", "umich-transit-mcp"],
+      "args": ["run", "umich-transit-demo-mcp"],
       "cwd": "/absolute/path/to/umich-transit-mcp"
     }
   }
 }
 ```
 
-Then ask Claude things like *"When's the next Commuter North bus at the Central
-Campus Transit Center, and is it usually on time right now?"* or *"Plan a trip
-from Pierpont Commons to the Central Campus Transit Center."*
+Replace `umich-transit-demo-mcp` with `umich-transit-mcp` when you want the
+configured live database and Magic Bus API.
 
-## Web dashboard (see it yourself, no chat)
+Good questions to try:
 
-Prefer a page you just glance at instead of asking Claude? Run the local
-dashboard:
+- “When is the next Commuter North bus at CCTC, and why did you adjust it?”
+- “How fresh is that prediction?”
+- “Do adjusted predictions actually beat Magic Bus overall?”
+- “Does the correction help on route CN specifically?”
 
-```bash
-uv run umich-transit-web        # opens http://localhost:8000 in your browser
+## Architecture
+
+```text
+BusTime predictions ──┐
+                     ├─> SQLite raw observations ─> matched outcomes
+Vehicle GPS ─────────┘                              │
+                                                    ├─> reliability profiles
+                                                    └─> holdout evaluation
+                                                              │
+                                ┌─────────────────────────────┴──────────┐
+                                ▼                                        ▼
+                         FastAPI dashboard                          MCP server
 ```
 
-Search for a stop, save a few favorites, and the page shows live arrivals with a
-green **"when to leave"** banner (set your walk time per stop). It reuses the same
-`core/` service as the MCP tools and reads the same database the poller fills, so
-its confidence ratings improve exactly as the historical data grows.
+- `core/` owns normalization, storage, matching, profiles, evaluation, and the
+  shared `TransitService` API.
+- `poller/` owns continuous collection, arrival detection, and analytics
+  refreshes.
+- `web/` and `mcp_server/` are thin presentation layers with no reliability
+  math or SQL.
+- SQLite WAL mode is the only supported database for this local milestone.
 
-## Running it 24/7
+Raw predictions and arrivals are the source of truth. Outcomes, profiles, and
+evaluation reports are derived and rebuildable.
 
-For continuous data collection, run the poller on an always-on host instead of
-your laptop. The repo ships a `Dockerfile` + `docker-compose.yml` (and a systemd
-unit) so deployment is a few commands:
+## Collect live data
+
+Register for a free BusTime API key through the Magic Bus developer portal,
+then:
 
 ```bash
-docker compose up -d --build   # auto-restarting, survives reboots
+cp .env.example .env
+# Set MBUS_API_KEY in .env
+
+uv sync --all-extras
+uv run alembic upgrade head
+uv run python scripts/seed_static_data.py
+uv run umich-transit-poller
 ```
 
-Full walkthrough (free VPS options, systemd alternative, pulling the data back
-to your laptop): **[docs/DEPLOY.md](docs/DEPLOY.md)**.
+Run `uv run umich-transit-web` in another terminal. Analytics refresh when the
+poller starts and every 24 hours. Confidence and evaluation coverage grow as
+real observations accumulate.
+
+For always-on collection, the repository includes Docker, systemd, and launchd
+options in [docs/DEPLOY.md](docs/DEPLOY.md).
 
 ## Known limitations
 
-- **Polling-based arrival detection.** If a bus passes a stop entirely between
-  two GPS polls (never observed within 30m), that arrival isn't recorded. Higher
-  poll frequency narrows the gap; it can't close it entirely.
-- **DST fall-back hour.** BusTime emits naive local timestamps. During the one
-  ambiguous hour when clocks fall back in November, a timestamp can't be
-  disambiguated from the string alone; it resolves to the earlier offset.
-- **Trip planner v1 is single-route.** No transfers yet (see roadmap).
-- **Detector state is in-memory.** It rebuilds after a poller restart; a handful
-  of arrivals around a restart may be missed.
+- GPS polling can miss a bus that passes a stop entirely between samples.
+- The proximity detector is intentionally conservative but is not ground-truth
+  schedule telemetry.
+- Detector hysteresis state is in memory and resets with the poller.
+- BusTime timestamps are ambiguous during the repeated DST fall-back hour; the
+  earlier offset is used.
+- Sparse routes or time bins remain unadjusted rather than borrowing a
+  cross-route global correction.
+- Transfers, full trip planning, TheRide integration, accounts, Postgres, and
+  public hosting are deferred.
 
-## FAQ
-
-**Why SQLite instead of Postgres?**
-Zero ops, ships with Python, and handles the write volume comfortably in WAL
-mode. The storage layer is SQLAlchemy, so moving to Postgres for a multi-user
-deployment is a connection-string change.
-
-**Why a separate poller process?**
-The dataset only exists if something polls continuously. The MCP server is
-launched on demand and exits between sessions, so coupling them would either
-lose data or re-poll on every question.
-
-**Why the BusTime API and not a GTFS feed?**
-Magic Bus runs the Clever Devices BusTime API, which exposes live predictions
-and vehicle positions directly. Ann Arbor's city buses (TheRide) publish
-GTFS-Realtime — that's on the roadmap.
-
-**Why bin reliability by local time?**
-Riders think in local time ("Thursday at 5pm"). Binning by UTC would smear the
-evening rush across two local hours and misattribute late-night trips to the
-wrong day.
-
-## Roadmap
-
-- TheRide (AAATA) GTFS-Realtime integration for Ann Arbor city buses
-- `stop_reliability` tool (per-stop detail)
-- Batch `get_arrivals` (BusTime accepts up to 10 stops per call)
-- 90-day prediction pruning job (+ a `captured_at` index)
-- FastAPI HTTP layer over the same `core/`
-- Next.js dashboard with route-reliability heatmaps
-- Crowdsourced arrival confirmations
-
-## Development
+## Verification
 
 ```bash
+uv run python scripts/smoke_showcase.py
 uv run pytest --cov=umich_transit --cov-report=term-missing
 uv run ruff check .
 uv run mypy src
 ```
+
+The smoke command builds an isolated demo database, exercises web health,
+search, accuracy, and static assets, and verifies the public MCP tool surface.
+
+## Two-minute demo flow
+
+1. Run `uv run umich-transit-demo`.
+2. Search for CCTC and compare the published and adjusted arrival guidance.
+3. Open **Accuracy proof** and explain the chronological 80/20 split.
+4. Ask the equivalent arrival and accuracy questions through MCP.
+5. Show that both surfaces use `TransitService`, then run the smoke command.
 
 ## License
 

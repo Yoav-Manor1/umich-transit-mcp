@@ -56,10 +56,12 @@ def test_get_arrivals_tool_passes_through_and_summarizes():
         "predicted_arrival_at": now + timedelta(minutes=4),
         "adjusted_arrival_at": now + timedelta(minutes=10),
         "on_time_pct_at_this_hour": 0.6, "sample_size": 80, "confidence": "high",
+        "adjustment_reason": "This route is typically 6 minutes late here.",
     }])
     result = asyncio.run(tools.get_arrivals_tool(svc, stop_id="s1", route_id=None, limit=5))
     assert result["arrivals"][0]["route_id"] == "r1"
     assert "r1" in result["summary"]
+    assert "typically 6 minutes late" in result["summary"]
     assert isinstance(result["summary"], str)
 
 
@@ -81,12 +83,22 @@ def test_route_reliability_tool():
     assert result["sample_count"] == 200
 
 
-def test_plan_trip_tool():
+def test_prediction_accuracy_tool_summarizes_held_out_result():
     svc = MagicMock()
-    svc.plan_trip = AsyncMock(return_value={
-        "summary": "Take route r1 (vehicle v1) from s1 to s2",
-        "plan": {"segments": [{"route_id": "r1"}]},
-    })
-    result = asyncio.run(tools.plan_trip_tool(svc, from_stop_id="s1", to_stop_id="s2"))
-    assert "r1" in result["summary"]
-    assert result["plan"]["segments"][0]["route_id"] == "r1"
+    svc.prediction_accuracy.return_value = {
+        "status": "ready", "holdout_sample_count": 20,
+        "metrics": {
+            "sample_count": 24,
+            "classification": "improved",
+            "published": {"mean_absolute_error_s": 180.0},
+            "adjusted": {"mean_absolute_error_s": 90.0},
+        },
+    }
+
+    result = tools.prediction_accuracy_tool(svc, route_id="r1")
+
+    assert "held-out" in result["summary"]
+    assert "24 held-out" in result["summary"]
+    assert "3.0 min" in result["summary"]
+    assert "1.5 min" in result["summary"]
+    svc.prediction_accuracy.assert_called_once_with(route_id="r1")

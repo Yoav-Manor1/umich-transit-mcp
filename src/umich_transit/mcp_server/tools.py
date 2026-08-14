@@ -50,11 +50,9 @@ async def get_arrivals_tool(
         raw_min = max(0, int((a["predicted_arrival_at"] - now).total_seconds() // 60))
         adj_min = max(0, int((a["adjusted_arrival_at"] - now).total_seconds() // 60))
         if a["confidence"] == "high" and adj_min != raw_min:
-            on_time = a["on_time_pct_at_this_hour"] or 0.0
             parts.append(
                 f"Route {a['route_id']}: published {raw_min} min, "
-                f"history suggests ~{adj_min} min "
-                f"({on_time:.0%} on-time, n={a['sample_size']})"
+                f"history suggests ~{adj_min} min. {a['adjustment_reason']}"
             )
         else:
             parts.append(
@@ -72,6 +70,30 @@ def route_reliability_tool(
     """Reliability stats for a route (on-time %, mean delay, samples).
     day_of_week: 0=Mon..6=Sun; hour: 0..23."""
     return svc.route_reliability(route_id=route_id, day_of_week=day_of_week, hour=hour)
+
+
+def prediction_accuracy_tool(
+    svc: TransitService, route_id: str | None = None,
+) -> dict[str, Any]:
+    """Compare published and adjusted error on chronologically held-out data."""
+    result = svc.prediction_accuracy(route_id=route_id)
+    if result["status"] != "ready" or result.get("metrics") is None:
+        result.setdefault("summary", "Not enough matched outcomes for a holdout evaluation.")
+        return result
+    metrics = result["metrics"]
+    assert isinstance(metrics, dict)
+    published = metrics["published"]
+    adjusted = metrics["adjusted"]
+    assert isinstance(published, dict) and isinstance(adjusted, dict)
+    published_min = float(published["mean_absolute_error_s"]) / 60
+    adjusted_min = float(adjusted["mean_absolute_error_s"]) / 60
+    evidence_count = int(metrics.get("sample_count", result["holdout_sample_count"]))
+    result["summary"] = (
+        f"On {evidence_count} held-out arrivals, published predictions "
+        f"averaged {published_min:.1f} min error versus {adjusted_min:.1f} min after "
+        f"adjustment ({metrics['classification']})."
+    )
+    return result
 
 
 async def plan_trip_tool(

@@ -48,3 +48,11 @@ def test_uses_adjusted_eta_when_high_confidence():
     )
     assert res is not None
     assert res["leave_in_min"] == 10
+
+
+def test_uses_adjusted_eta_when_medium_confidence():
+    res = compute_leave(
+        [_eta(6, confidence="medium", adj_minutes=10)], walk_min=2, now=NOW
+    )
+    assert res is not None
+    assert res["leave_in_min"] == 8
