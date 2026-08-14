@@ -1,4 +1,5 @@
 """Deterministic showcase data kept separate from live transit observations."""
+from collections.abc import Callable
 from datetime import UTC, datetime, timedelta
 from pathlib import Path
 from zoneinfo import ZoneInfo
@@ -30,12 +31,13 @@ DEMO_RESIDUAL_SECONDS = (-60, -30, 0, 30, 60)
 
 
 class DemoMbusClient(MbusClient):
-    """Small deterministic live feed whose timestamps are relative to startup."""
+    """Small deterministic feed whose timestamps stay relative to each request."""
 
-    def __init__(self, now: datetime) -> None:
-        self._now = now
+    def __init__(self, clock: Callable[[], datetime] | None = None) -> None:
+        self._clock = clock or (lambda: datetime.now(UTC))
 
     async def get_etas(self, stop_id: str) -> list[EtaRecord]:
+        now = self._clock()
         route = next((item for item in DEMO_ROUTES if item[3] == stop_id), None)
         if route is None:
             return []
@@ -45,21 +47,24 @@ class DemoMbusClient(MbusClient):
                 route_id=route_id,
                 stop_id=stop_id,
                 vehicle_id=f"demo-{route_id}-1",
-                predicted_arrival_at=self._now + timedelta(minutes=6),
-                captured_at=self._now,
+                predicted_arrival_at=now + timedelta(minutes=6),
+                captured_at=now,
             ),
             EtaRecord(
                 route_id=route_id,
                 stop_id=stop_id,
                 vehicle_id=f"demo-{route_id}-2",
-                predicted_arrival_at=self._now + timedelta(minutes=16),
-                captured_at=self._now,
+                predicted_arrival_at=now + timedelta(minutes=16),
+                captured_at=now,
             ),
         ]
 
 
 def build_demo_service(
-    database_url: str, *, now: datetime | None = None,
+    database_url: str,
+    *,
+    now: datetime | None = None,
+    live_clock: Callable[[], datetime] | None = None,
 ) -> tuple[TransitService, Engine]:
     """Rebuild a dedicated demo database and return its service and engine."""
     demo_path = _validate_demo_url(database_url)
@@ -71,7 +76,7 @@ def build_demo_service(
     Base.metadata.create_all(engine)
     _seed_demo_history(engine, moment)
     refresh_showcase_analytics(engine)
-    return TransitService(engine=engine, mbus=DemoMbusClient(moment)), engine
+    return TransitService(engine=engine, mbus=DemoMbusClient(live_clock)), engine
 
 
 def _seed_demo_history(engine: Engine, now: datetime) -> None:

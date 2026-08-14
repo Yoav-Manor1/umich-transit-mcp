@@ -1,5 +1,5 @@
 """Tests for the deterministic, isolated showcase dataset."""
-from datetime import UTC, datetime
+from datetime import UTC, datetime, timedelta
 
 import pytest
 from sqlalchemy import func, select
@@ -12,7 +12,9 @@ from umich_transit.core.storage.models import EvaluationReportRow, PredictionOut
 async def test_demo_service_builds_ready_evidence_and_relative_arrivals():
     now = datetime(2026, 8, 14, 16, 0, tzinfo=UTC)
 
-    service, engine = build_demo_service("sqlite:///:memory:", now=now)
+    service, engine = build_demo_service(
+        "sqlite:///:memory:", now=now, live_clock=lambda: now,
+    )
 
     with session_scope(engine) as session:
         outcome_count = session.scalar(select(func.count()).select_from(PredictionOutcome))
@@ -33,6 +35,19 @@ async def test_demo_service_builds_ready_evidence_and_relative_arrivals():
     assert arrivals
     assert arrivals[0]["predicted_arrival_at"] > now
     assert arrivals[0]["confidence"] in {"high", "medium"}
+
+
+async def test_demo_live_feed_stays_fresh_after_long_running_server():
+    started_at = datetime.now(UTC) - timedelta(minutes=20)
+    service, _engine = build_demo_service("sqlite:///:memory:", now=started_at)
+    request_time = datetime.now(UTC)
+
+    arrivals = await service.get_arrivals(stop_id="CCTC", now=request_time)
+
+    assert arrivals
+    assert all(arrival["data_age_s"] < 2 for arrival in arrivals)
+    assert all(arrival["is_stale"] is False for arrival in arrivals)
+    assert all(arrival["predicted_arrival_at"] > request_time for arrival in arrivals)
 
 
 def test_demo_refuses_to_rebuild_a_non_demo_database(tmp_path):
