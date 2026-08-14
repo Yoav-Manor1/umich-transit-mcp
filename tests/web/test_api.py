@@ -1,5 +1,6 @@
 """Tests for the web dashboard HTTP endpoints."""
 from datetime import UTC, datetime, timedelta
+from html.parser import HTMLParser
 from unittest.mock import AsyncMock
 
 from fastapi.testclient import TestClient
@@ -11,6 +12,20 @@ from umich_transit.core.storage.db import create_engine_for_url, session_scope
 from umich_transit.core.storage.models import Base, EvaluationReportRow, Route, Stop
 from umich_transit.web.app import build_app
 from umich_transit.web.demo import build_demo_app
+
+
+class _ElementIds(HTMLParser):
+    def __init__(self) -> None:
+        super().__init__()
+        self.ids: set[str] = set()
+
+    def handle_starttag(
+        self, tag: str, attrs: list[tuple[str, str | None]],
+    ) -> None:
+        del tag
+        for name, value in attrs:
+            if name == "id" and value is not None:
+                self.ids.add(value)
 
 
 def _service(etas=None, raise_upstream=False, with_evaluation=False):
@@ -102,6 +117,16 @@ def test_meta_explicitly_labels_demo_mode():
     client = TestClient(build_app(_service(), demo_mode=True))
 
     assert client.get("/api/meta").json() == {"demo_mode": True}
+
+
+def test_showcase_uses_a_subtle_demo_label_instead_of_a_large_banner():
+    client = TestClient(build_app(_service(), demo_mode=True))
+    parser = _ElementIds()
+
+    parser.feed(client.get("/").text)
+
+    assert "demo-label" in parser.ids
+    assert "demo-banner" not in parser.ids
 
 
 def test_demo_app_starts_with_ready_accuracy_and_searchable_stops(tmp_path):

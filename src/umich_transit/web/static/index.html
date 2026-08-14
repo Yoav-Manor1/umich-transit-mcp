@@ -13,18 +13,17 @@
       <span class="brand-mark">M</span>
       <span><strong>TrueBlue</strong><small>TRANSIT INTELLIGENCE</small></span>
     </a>
-    <span id="updated" class="updated">Waiting for live data</span>
+    <div class="header-status">
+      <span id="demo-label" class="demo-label" hidden>Sample times</span>
+      <span id="updated" class="updated">Waiting for live data</span>
+    </div>
   </header>
 
   <main class="shell">
-    <div id="demo-banner" class="demo-banner" hidden>
-      <strong>Demo data</strong>
-      <span>Synthetic history with startup-relative arrivals. Results are illustrative.</span>
-    </div>
     <section class="hero">
       <p class="eyebrow">U-M BUS ARRIVALS, CHECKED AGAINST REALITY</p>
       <h1>Know when to leave.<br><em>See why.</em></h1>
-      <p class="hero-copy">Live Magic Bus predictions, corrected only when historical evidence is strong enough.</p>
+      <p class="hero-copy">Get a better estimate of when your bus will arrive, based on what usually happens on this route.</p>
     </section>
 
     <nav class="view-tabs" aria-label="Dashboard views">
@@ -101,8 +100,8 @@
   </main>
 
   <footer>
-    <span>Built from live BusTime predictions + GPS-inferred arrivals</span>
-    <span>Transparent model · No black box</span>
+    <span>Built to make U-M bus arrival times easier to trust</span>
+    <span>Every adjusted time includes an explanation</span>
   </footer>
   <script src="/static/app.js"></script>
 </body>

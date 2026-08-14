@@ -294,9 +294,9 @@ function switchView(name) {
 async function loadMeta() {
   try {
     const meta = await api("/api/meta");
-    document.getElementById("demo-banner").hidden = !meta.demo_mode;
+    document.getElementById("demo-label").hidden = !meta.demo_mode;
   } catch {
-    document.getElementById("demo-banner").hidden = true;
+    document.getElementById("demo-label").hidden = true;
   }
 }
 

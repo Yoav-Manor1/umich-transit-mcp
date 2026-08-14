@@ -44,11 +44,11 @@ button { color: inherit; }
 }
 .brand strong { display: block; font-size: 18px; letter-spacing: -.02em; }
 .brand small { display: block; margin-top: 2px; font-size: 8px; letter-spacing: .18em; opacity: .72; }
+.header-status { display: flex; align-items: center; gap: 10px; }
+.demo-label { padding: 5px 9px; border: 1px solid rgba(255, 203, 5, .45); border-radius: 999px; color: var(--maize); font-size: 10px; font-weight: 800; letter-spacing: .04em; }
 .updated { font-size: 12px; color: #d7e2ed; }
 
 .shell { width: min(920px, calc(100% - 32px)); margin: 0 auto 64px; }
-.demo-banner { display: flex; gap: 10px; align-items: center; margin-top: 20px; padding: 11px 14px; color: #6d4a00; background: #fff2b8; border: 1px solid #e5c242; border-radius: 11px; font-size: 12px; }
-.demo-banner strong { color: var(--navy); text-transform: uppercase; letter-spacing: .08em; }
 .hero { padding: 58px 0 34px; }
 .eyebrow, .section-label { margin: 0 0 10px; color: #55718b; font-size: 11px; font-weight: 800; letter-spacing: .14em; }
 .hero h1 { margin: 0; color: var(--navy); font: 700 clamp(42px, 7vw, 72px)/.96 Georgia, serif; letter-spacing: -.045em; }
