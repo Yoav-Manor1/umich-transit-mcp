@@ -4,7 +4,6 @@ from datetime import UTC, datetime
 
 import structlog
 from sqlalchemy import Engine, select
-from sqlalchemy.dialects.sqlite import insert as sqlite_insert
 
 from umich_transit.core.reliability import (
     BinKey,
@@ -12,8 +11,9 @@ from umich_transit.core.reliability import (
     delays_from_pairs,
 )
 from umich_transit.core.storage.db import session_scope
-from umich_transit.core.storage.models import Arrival, ReliabilityStat
+from umich_transit.core.storage.models import Arrival
 from umich_transit.core.storage.queries import prediction_for_arrival
+from umich_transit.core.storage.upsert import build_reliability_upsert
 
 logger = structlog.get_logger(__name__)
 
@@ -56,32 +56,26 @@ def recompute_all_bins(
     now = datetime.now(UTC)
     written = 0
     with session_scope(engine) as s:
+        dialect_name = s.get_bind().dialect.name
         for key, delays in bins.items():
             stats = compute_bin_stats(delays, on_time_threshold_s=on_time_threshold_s)
-            stmt = sqlite_insert(ReliabilityStat).values(
-                route_id=key.route_id, stop_id=key.stop_id,
-                dow=key.dow, hour=key.hour,
-                on_time_pct=stats.on_time_pct,
-                mean_delay_s=stats.mean_delay_s,
-                p50_delay_s=stats.p50_delay_s,
-                p90_delay_s=stats.p90_delay_s,
-                sample_count=stats.sample_count,
-                updated_at=now,
+            s.execute(
+                build_reliability_upsert(
+                    dialect_name,
+                    {
+                        "route_id": key.route_id,
+                        "stop_id": key.stop_id,
+                        "dow": key.dow,
+                        "hour": key.hour,
+                        "on_time_pct": stats.on_time_pct,
+                        "mean_delay_s": stats.mean_delay_s,
+                        "p50_delay_s": stats.p50_delay_s,
+                        "p90_delay_s": stats.p90_delay_s,
+                        "sample_count": stats.sample_count,
+                        "updated_at": now,
+                    },
+                )
             )
-            s.execute(stmt.on_conflict_do_update(
-                index_elements=[
-                    ReliabilityStat.route_id, ReliabilityStat.stop_id,
-                    ReliabilityStat.dow, ReliabilityStat.hour,
-                ],
-                set_={
-                    "on_time_pct": stats.on_time_pct,
-                    "mean_delay_s": stats.mean_delay_s,
-                    "p50_delay_s": stats.p50_delay_s,
-                    "p90_delay_s": stats.p90_delay_s,
-                    "sample_count": stats.sample_count,
-                    "updated_at": now,
-                },
-            ))
             written += 1
 
     logger.info("stats_job.done", matched=matched, unmatched=unmatched, bins=written)

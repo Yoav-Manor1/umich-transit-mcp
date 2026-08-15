@@ -1,7 +1,26 @@
 """Tests for the database engine and session factory."""
+
+import pytest
 from sqlalchemy import text
 
-from umich_transit.core.storage.db import create_engine_for_url, session_scope
+from umich_transit.core.storage.db import (
+    create_engine_for_url,
+    normalize_database_url,
+    session_scope,
+)
+
+
+@pytest.mark.parametrize(
+    ("raw", "expected"),
+    [
+        ("postgres://u:p@host/db", "postgresql+psycopg://u:p@host/db"),
+        ("postgresql://u:p@host/db", "postgresql+psycopg://u:p@host/db"),
+        ("postgresql+psycopg://u:p@host/db", "postgresql+psycopg://u:p@host/db"),
+        ("sqlite:///data/test.db", "sqlite:///data/test.db"),
+    ],
+)
+def test_normalize_database_url(raw, expected):
+    assert normalize_database_url(raw) == expected
 
 
 def test_create_engine_uses_wal_for_sqlite():

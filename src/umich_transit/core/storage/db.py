@@ -7,12 +7,22 @@ from sqlalchemy.orm import Session, sessionmaker
 from sqlalchemy.pool import StaticPool
 
 
+def normalize_database_url(url: str) -> str:
+    """Select psycopg 3 for provider-style PostgreSQL connection URLs."""
+    if url.startswith("postgres://"):
+        return "postgresql+psycopg://" + url.removeprefix("postgres://")
+    if url.startswith("postgresql://"):
+        return "postgresql+psycopg://" + url.removeprefix("postgresql://")
+    return url
+
+
 def create_engine_for_url(url: str) -> Engine:
     """Build an Engine; enable WAL + foreign keys for file-backed SQLite.
 
     In-memory SQLite uses a StaticPool so a single shared connection persists
     across sessions (otherwise each session would get a fresh, empty database).
     """
+    url = normalize_database_url(url)
     is_sqlite = url.startswith("sqlite")
     is_memory = is_sqlite and ":memory:" in url
 
