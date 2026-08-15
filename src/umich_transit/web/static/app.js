@@ -234,6 +234,16 @@ async function refresh() {
 
 function renderAccuracy(report) {
   document.getElementById("accuracy-headline").textContent = report.headline;
+  const routes = document.getElementById("route-results");
+  routes.innerHTML = "";
+  if (report.status === "insufficient_evidence") {
+    document.getElementById("published-mae").textContent = "—";
+    document.getElementById("adjusted-mae").textContent = "—";
+    document.getElementById("within-two").textContent = "—";
+    document.getElementById("within-two-detail").textContent = "evaluation pending";
+    document.getElementById("sample-count").textContent = "Collecting holdout evidence";
+    return;
+  }
   document.getElementById("published-mae").textContent =
     fmtDuration(report.published.mean_absolute_error_s);
   document.getElementById("adjusted-mae").textContent =
@@ -244,8 +254,6 @@ function renderAccuracy(report) {
     `${Math.round(report.published.within_two_minutes_pct * 100)}% published`;
   document.getElementById("sample-count").textContent = `${report.sample_count} holdout predictions`;
 
-  const routes = document.getElementById("route-results");
-  routes.innerHTML = "";
   (report.routes || []).forEach((route) => {
     const row = document.createElement("div");
     row.className = "route-result";

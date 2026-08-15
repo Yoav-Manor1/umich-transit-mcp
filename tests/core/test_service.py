@@ -114,3 +114,24 @@ def test_route_reliability_no_data(engine):
     svc = TransitService(engine=engine, mbus=AsyncMock())
     r = svc.route_reliability(route_id="ghost")
     assert r["sample_count"] == 0
+
+
+def test_readiness_checks_the_live_database(engine):
+    svc = TransitService(engine=engine, mbus=AsyncMock())
+
+    assert svc.readiness() == {
+        "status": "ready",
+        "mode": "live",
+        "data_source": "database",
+    }
+
+
+def test_prediction_accuracy_does_not_claim_unevaluated_results(engine):
+    svc = TransitService(engine=engine, mbus=AsyncMock())
+
+    report = svc.prediction_accuracy(route_id="r1")
+
+    assert report["status"] == "insufficient_evidence"
+    assert report["sample_count"] == 0
+    assert report["route_id"] == "r1"
+    assert "not published" in report["headline"]

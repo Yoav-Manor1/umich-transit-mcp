@@ -7,7 +7,8 @@ nightly stats job, so reads and writes always agree on the (dow, hour) bin.
 from datetime import UTC, datetime, timedelta
 from typing import Any
 
-from sqlalchemy import Engine, select
+from sqlalchemy import Engine, select, text
+from sqlalchemy.exc import SQLAlchemyError
 
 from umich_transit.core.clients.mbus import MbusClient
 from umich_transit.core.planner import TripPlanner
@@ -57,6 +58,38 @@ class TransitService:
                 }
                 for st in q_find_stops(session, query=query, near=near, limit=limit)
             ]
+
+    def readiness(self) -> dict[str, Any]:
+        """Report whether the durable store used by live mode is reachable."""
+        try:
+            with self._engine.connect() as connection:
+                connection.execute(text("SELECT 1"))
+        except SQLAlchemyError:
+            return {
+                "status": "unavailable",
+                "mode": "live",
+                "data_source": "database",
+            }
+        return {
+            "status": "ready",
+            "mode": "live",
+            "data_source": "database",
+        }
+
+    def prediction_accuracy(
+        self, route_id: str | None = None,
+    ) -> dict[str, Any]:
+        """Avoid publishing an accuracy claim until holdout evaluation exists."""
+        return {
+            "status": "insufficient_evidence",
+            "data_source": "live",
+            "sample_count": 0,
+            "route_id": route_id,
+            "headline": (
+                "Live accuracy results are not published until the holdout "
+                "evaluation has enough matched arrivals."
+            ),
+        }
 
     async def get_arrivals(
         self,
