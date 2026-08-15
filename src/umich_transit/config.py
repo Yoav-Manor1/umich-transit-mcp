@@ -27,6 +27,9 @@ class Settings(BaseSettings):
 
     log_level: str = "INFO"
 
+    transit_app_mode: str | None = None
+    vercel: bool = False
+
     @property
     def sqlite_path(self) -> Path | None:
         """Return the SQLite file path if the URL is a file-backed SQLite URL.

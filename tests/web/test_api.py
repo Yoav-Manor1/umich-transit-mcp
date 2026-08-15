@@ -32,6 +32,11 @@ def test_health_ok():
     assert client.get("/api/health").json() == {"status": "ok"}
 
 
+def test_health_reports_application_mode_when_supplied():
+    client = TestClient(build_app(_service(), app_mode="demo"))
+    assert client.get("/api/health").json() == {"status": "ok", "mode": "demo"}
+
+
 def test_search_returns_matching_stops():
     client = TestClient(build_app(_service()))
     r = client.get("/api/stops/search", params={"q": "central"})

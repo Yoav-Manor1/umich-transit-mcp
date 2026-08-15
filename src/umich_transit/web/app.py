@@ -9,7 +9,7 @@ from collections.abc import AsyncIterator
 from contextlib import asynccontextmanager
 from datetime import UTC, datetime
 from pathlib import Path
-from typing import Any
+from typing import Any, cast
 
 import httpx
 from fastapi import FastAPI, Request
@@ -21,11 +21,16 @@ from umich_transit.core.clients.mbus import BusTimeError, MbusClient
 from umich_transit.core.service import TransitService
 from umich_transit.core.storage.db import create_engine_for_url
 from umich_transit.web.leave import compute_leave
+from umich_transit.web.protocols import WebTransitService
 
 STATIC_DIR = Path(__file__).resolve().parent / "static"
 
 
-def build_app(svc: TransitService | None = None) -> FastAPI:
+def build_app(
+    svc: WebTransitService | TransitService | None = None,
+    *,
+    app_mode: str | None = None,
+) -> FastAPI:
     @asynccontextmanager
     async def lifespan(app: FastAPI) -> AsyncIterator[None]:
         if getattr(app.state, "svc", None) is None:
@@ -36,7 +41,9 @@ def build_app(svc: TransitService | None = None) -> FastAPI:
                 api_key=settings.mbus_api_key.get_secret_value(),
                 http=http,
             )
-            app.state.svc = TransitService(engine=engine, mbus=mbus)
+            app.state.svc = cast(
+                WebTransitService, TransitService(engine=engine, mbus=mbus)
+            )
             app.state.http = http
         try:
             yield
@@ -46,23 +53,26 @@ def build_app(svc: TransitService | None = None) -> FastAPI:
                 await http_client.aclose()
 
     app = FastAPI(title="U-Mich Transit Dashboard", lifespan=lifespan)
-    app.state.svc = svc
+    app.state.svc = cast(WebTransitService | None, svc)
     app.state.http = None
 
     @app.get("/api/health")
     def health() -> dict[str, str]:
-        return {"status": "ok"}
+        response = {"status": "ok"}
+        if app_mode is not None:
+            response["mode"] = app_mode
+        return response
 
     @app.get("/api/stops/search")
     def search_stops(request: Request, q: str = "", limit: int = 8) -> dict[str, Any]:
-        svc: TransitService = request.app.state.svc
+        svc: WebTransitService = request.app.state.svc
         return {"stops": svc.find_stops(query=q, limit=limit)}
 
     @app.get("/api/arrivals")
     async def arrivals(
         request: Request, stop_id: str, walk_min: int = 5, limit: int = 5
     ) -> dict[str, Any]:
-        svc: TransitService = request.app.state.svc
+        svc: WebTransitService = request.app.state.svc
         now = datetime.now(UTC)
         try:
             items = await svc.get_arrivals(stop_id=stop_id, limit=limit)
