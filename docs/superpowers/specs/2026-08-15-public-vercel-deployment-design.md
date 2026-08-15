@@ -84,6 +84,13 @@ The page displays a persistent `Demo data` banner and an explanation that the
 arrivals and accuracy results are illustrative. It must never present fixture
 metrics as real-world performance.
 
+For this public milestone, the demo service reads the versioned showcase
+fixtures directly in memory. This supersedes the SQLite-seeding mechanism in
+the earlier showcase design for the web demo path; SQLite remains available for
+local live-data development and the stdio MCP workflow. Direct fixture loading
+keeps the public demo deterministic and avoids pretending an ephemeral Vercel
+file is durable storage.
+
 ### Phase 2: live production data
 
 Provision a managed PostgreSQL database, run Alembic migrations, migrate any
@@ -225,4 +232,3 @@ This milestone is complete when:
 7. Tests, Ruff, strict MyPy, and deployment smoke checks pass.
 8. No custom-domain purchase, DNS mutation, or paid resource is created without
    explicit user authorization.
-
