@@ -5,6 +5,8 @@ answers about University of Michigan buses. It does not just relay Magic Bus
 predictions: it logs them, infers actual arrivals from live GPS, and learns the
 gap between the two.
 
+**Live demo:** [honest-eta-theta.vercel.app](https://honest-eta-theta.vercel.app)
+
 > "Magic Bus says 4 minutes. The bus shows up in 12.
 > This server learns from that gap and tells you the difference."
 
@@ -13,8 +15,8 @@ gap between the two.
 ![demo](screenshots/demo.gif)
 -->
 
-![Python](https://img.shields.io/badge/python-3.11+-blue)
-![Tests](https://img.shields.io/badge/tests-123%20passing-brightgreen)
+![Python](https://img.shields.io/badge/python-3.12+-blue)
+![Tests](https://img.shields.io/badge/tests-127%20passing-brightgreen)
 ![License](https://img.shields.io/badge/license-MIT-green)
 
 ## What it does
@@ -23,8 +25,6 @@ The recruiter-facing web showcase compares published and evidence-backed ETAs,
 explains confidence and sample size, and includes a clearly labeled deterministic
 demo for times when service or live history is unavailable. The same typed core
 also powers five read-only MCP tools:
-
-Five read-only MCP tools:
 
 | Tool | What it answers |
 |------|-----------------|
@@ -164,6 +164,9 @@ The web application deploys to Vercel as one FastAPI function. Phase-one
 deployments run in explicit demo mode and need no secrets. Live deployments use
 a managed PostgreSQL `DATABASE_URL`; the continuous poller stays on an always-on
 host because it is a worker, not a request handler.
+
+The verified public demo is available at
+[honest-eta-theta.vercel.app](https://honest-eta-theta.vercel.app).
 
 See [docs/DEPLOY.md](docs/DEPLOY.md) for Vercel, PostgreSQL migration, worker,
 rollback, and later custom-domain instructions.

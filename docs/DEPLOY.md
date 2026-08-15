@@ -15,14 +15,19 @@ collects predictions every two minutes and vehicle positions every 30 seconds.
 
 Demo mode is database-free and requires no BusTime secret. Import the GitHub
 repository into Vercel or deploy an authenticated checkout with the Vercel CLI.
-The checked-in `vercel.json` sets `TRANSIT_APP_MODE=demo` and bundles both the
-static site and versioned fixtures.
+The checked-in `vercel.json` sets `TRANSIT_APP_MODE=demo`, routes requests to
+the file-based FastAPI entry point, and bundles both the static site and
+versioned fixtures. The project requires Python 3.12, the oldest Python runtime
+currently supported by Vercel.
 
 After deployment, verify the generated URL:
 
 ```bash
 uv run python scripts/smoke_public_demo.py --base-url https://YOUR-PROJECT.vercel.app
 ```
+
+The current verified deployment is
+[honest-eta-theta.vercel.app](https://honest-eta-theta.vercel.app).
 
 Every check must pass before sharing the link. Preview and production pages must
 display the `Demo data` banner; illustrative accuracy numbers are not real-world

@@ -54,7 +54,7 @@ def build_app(
                 await http_client.aclose()
 
     app = FastAPI(title="U-Mich Transit Dashboard", lifespan=lifespan)
-    app.state.svc = cast(WebTransitService | None, svc)
+    app.state.svc = svc
     app.state.http = managed_http
 
     @app.get("/api/health")

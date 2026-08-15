@@ -3,7 +3,7 @@ name = "umich-transit-mcp"
 version = "0.1.0"
 description = "MCP server that surfaces empirically adjusted U-Mich bus arrival times to Claude"
 readme = "README.md"
-requires-python = ">=3.11"
+requires-python = ">=3.12"
 license = { text = "MIT" }
 authors = [{ name = "Yoav Manor" }]
 dependencies = [
@@ -51,7 +51,7 @@ extend-exclude = ["src/umich_transit/core/storage/migrations/"]
 select = ["E", "F", "I", "B", "UP", "N"]
 
 [tool.mypy]
-python_version = "3.11"
+python_version = "3.12"
 strict = true
 ignore_missing_imports = true
 exclude = ["src/umich_transit/core/storage/migrations/"]

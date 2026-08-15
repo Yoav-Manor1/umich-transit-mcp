@@ -25,3 +25,5 @@ data/
 *.db-shm
 logs/
 *.log
+.vercel
+.env.local

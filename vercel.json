@@ -4,12 +4,12 @@
     "TRANSIT_APP_MODE": "demo"
   },
   "functions": {
-    "app.py": {
-      "includeFiles": [
-        "src/umich_transit/demo/fixtures/**",
-        "src/umich_transit/web/static/**"
-      ],
+    "api/index.py": {
+      "includeFiles": "src/umich_transit/**",
       "maxDuration": 30
     }
-  }
+  },
+  "rewrites": [
+    {"source": "/(.*)", "destination": "/api/index"}
+  ]
 }
