@@ -1,8 +1,9 @@
-# U-Mich Transit MCP Server
+# Honest ETA - U-Mich Transit Reliability
 
-An MCP server that gives Claude *honest* answers about University of Michigan
-buses. It doesn't just relay the Magic Bus arrival predictions — it logs them,
-infers actual arrivals from live GPS, and learns the gap between the two.
+A transit reliability platform that gives riders and AI assistants *honest*
+answers about University of Michigan buses. It does not just relay Magic Bus
+predictions: it logs them, infers actual arrivals from live GPS, and learns the
+gap between the two.
 
 > "Magic Bus says 4 minutes. The bus shows up in 12.
 > This server learns from that gap and tells you the difference."
@@ -13,10 +14,15 @@ infers actual arrivals from live GPS, and learns the gap between the two.
 -->
 
 ![Python](https://img.shields.io/badge/python-3.11+-blue)
-![Tests](https://img.shields.io/badge/tests-73%20passing-brightgreen)
+![Tests](https://img.shields.io/badge/tests-123%20passing-brightgreen)
 ![License](https://img.shields.io/badge/license-MIT-green)
 
 ## What it does
+
+The recruiter-facing web showcase compares published and evidence-backed ETAs,
+explains confidence and sample size, and includes a clearly labeled deterministic
+demo for times when service or live history is unavailable. The same typed core
+also powers five read-only MCP tools:
 
 Five read-only MCP tools:
 
@@ -43,8 +49,8 @@ so the same code can later back an HTTP API and a web dashboard.
 
 ```
 ┌────────────────┐     ┌────────────────┐     ┌─────────────────────┐
-│  MCP Server    │     │  HTTP API      │     │  Next.js dashboard  │
-│  (5 tools)     │     │  (planned)     │     │  (planned)          │
+│  MCP Server    │     │  FastAPI       │     │  Web dashboard       │
+│  (5 tools)     │     │  JSON API      │     │  (responsive)        │
 └───────┬────────┘     └───────┬────────┘     └──────────┬──────────┘
         │                      │                         │
         ▼                      ▼                         ▼
@@ -55,7 +61,7 @@ so the same code can later back an HTTP API and a web dashboard.
 └───────────────────┬──────────────────────┘
                     ▼
 ┌──────────────────────────────────────────┐
-│  SQLite (WAL)  →  Postgres for the app    │
+│  SQLite locally · PostgreSQL in production │
 └───────────────────▲──────────────────────┘
                     │
 ┌───────────────────┴──────────────────────┐
@@ -87,6 +93,21 @@ other — the SQLite database is the only seam.
    has ≥ 50 samples (otherwise `low`, with no adjustment).
 
 ## Quickstart
+
+### Deterministic showcase
+
+The public-demo mode needs no API key or database and always contains upcoming
+illustrative arrivals:
+
+```bash
+uv sync --all-extras
+TRANSIT_APP_MODE=demo uv run uvicorn app:app
+```
+
+Open `http://127.0.0.1:8000`. A persistent banner distinguishes demo fixtures
+from real performance evidence.
+
+### Live data
 
 You need a free **BusTime API key** for Magic Bus. Register a developer account
 via the Magic Bus developer portal (linked from `mbus.ltp.umich.edu`) and copy
@@ -136,6 +157,16 @@ Search for a stop, save a few favorites, and the page shows live arrivals with a
 green **"when to leave"** banner (set your walk time per stop). It reuses the same
 `core/` service as the MCP tools and reads the same database the poller fills, so
 its confidence ratings improve exactly as the historical data grows.
+
+## Public deployment
+
+The web application deploys to Vercel as one FastAPI function. Phase-one
+deployments run in explicit demo mode and need no secrets. Live deployments use
+a managed PostgreSQL `DATABASE_URL`; the continuous poller stays on an always-on
+host because it is a worker, not a request handler.
+
+See [docs/DEPLOY.md](docs/DEPLOY.md) for Vercel, PostgreSQL migration, worker,
+rollback, and later custom-domain instructions.
 
 ## Running it 24/7
 

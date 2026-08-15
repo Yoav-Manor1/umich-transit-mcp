@@ -1,4 +1,74 @@
-# Deploying the poller for 24/7 collection
+# Deploying Honest ETA
+
+The public web application and the continuous collector have different runtime
+needs:
+
+```text
+Vercel FastAPI web function ---> PostgreSQL <--- always-on poller container
+```
+
+Vercel serves the recruiter-facing site and request-driven API. It must not run
+the polling loops. The poller needs an always-on container or service because it
+collects predictions every two minutes and vehicle positions every 30 seconds.
+
+## Phase 1: Vercel demo deployment
+
+Demo mode is database-free and requires no BusTime secret. Import the GitHub
+repository into Vercel or deploy an authenticated checkout with the Vercel CLI.
+The checked-in `vercel.json` sets `TRANSIT_APP_MODE=demo` and bundles both the
+static site and versioned fixtures.
+
+After deployment, verify the generated URL:
+
+```bash
+uv run python scripts/smoke_public_demo.py --base-url https://YOUR-PROJECT.vercel.app
+```
+
+Every check must pass before sharing the link. Preview and production pages must
+display the `Demo data` banner; illustrative accuracy numbers are not real-world
+performance claims.
+
+## Phase 2: live PostgreSQL deployment
+
+Create a managed PostgreSQL database only after the demo deployment is stable.
+Configure these environment variables for the Vercel production environment
+and the poller host:
+
+```text
+TRANSIT_APP_MODE=live
+DATABASE_URL=postgresql://USER:PASSWORD@HOST/DATABASE?sslmode=require
+MBUS_API_KEY=your-key
+```
+
+Do not expose these values in client-side JavaScript, screenshots, logs, or the
+repository. Run Alembic migrations against the destination before starting the
+poller. The migration command below does that automatically.
+
+To preserve an existing SQLite history, stop the SQLite poller first so its WAL
+is consistent, then run:
+
+```bash
+uv run python scripts/migrate_database.py \
+  --source-url sqlite:///./data/transit.db \
+  --destination-url "$DATABASE_URL"
+```
+
+The command refuses a non-empty destination by default, prints verified row
+counts, never deletes the source, and redacts database passwords. Use
+`--replace` only when intentionally replacing every application table in the
+destination.
+
+Rollback is configuration-only: set the web deployment back to demo mode and
+restart the previous SQLite poller. Keep the source SQLite file until the live
+deployment has collected and served data successfully.
+
+## Phase 3: custom domain
+
+Attach the chosen domain only after the generated `*.vercel.app` production URL
+passes the smoke check. Domain purchase and DNS changes are deliberately not
+part of the automated deployment workflow.
+
+## Deploying the poller for 24/7 collection
 
 The poller must run continuously to build the reliability dataset. A laptop
 isn't ideal (it sleeps), so run it on a small always-on Linux box. This guide
@@ -144,10 +214,9 @@ on your **laptop** (launched by Claude Desktop). Two ways to bridge that:
    Drop it at `data/transit.db` locally and the MCP server reads it. Re-pull
    whenever you want fresh reliability stats.
 
-2. **Move to Postgres** (the "real app" path, on the roadmap) — point both the
-   server-side poller and your local MCP server at one managed Postgres via
-   `DATABASE_URL`. The storage layer is already SQLAlchemy, so this is a
-   connection-string change plus running migrations against Postgres.
+2. **Use PostgreSQL for the live app** — point the server-side poller, Vercel
+   application, and optional local MCP server at one managed PostgreSQL
+   `DATABASE_URL`. Follow Phase 2 above to migrate existing SQLite history.
 
 ## Notes
 
