@@ -1,105 +1,107 @@
-# U-Mich Transit Intelligence
+# TrueBlue Transit
 
-Magic Bus tells you when a bus *should* arrive. This project measures when it
-actually arrives, learns recurring prediction bias, and only adjusts an ETA when
-the historical evidence is strong enough.
+**Better estimates for when your U-M bus will actually arrive.**
 
-> Magic Bus said four minutes. Historical evidence suggested nine. The bus
-> arrived in ten.
+TrueBlue Transit compares published bus times with how buses have arrived in
+the past. When there is enough evidence, it gives riders a more useful arrival
+estimate, explains the change, and shows how confident it is.
 
-The same transparent reliability engine powers a polished local dashboard and
-five read-only MCP tools. A chronological holdout report shows whether the
-adjustment really helps; negative results are reported rather than hidden.
+The project includes a mobile-friendly dashboard and an MCP server backed by
+the same reliability engine.
 
-![Python](https://img.shields.io/badge/python-3.11+-blue)
-![Tests](https://img.shields.io/badge/tests-pytest-brightgreen)
+![Python](https://img.shields.io/badge/Python-3.11+-3776AB)
+![FastAPI](https://img.shields.io/badge/FastAPI-dashboard-009688)
+![MCP](https://img.shields.io/badge/MCP-5_tools-6C47FF)
 ![License](https://img.shields.io/badge/license-MIT-green)
 
-## Try the complete showcase
+## Try it in 30 seconds
 
-No API key or live bus service is required:
+No API key or live bus service is needed for the sample demo.
 
 ```bash
 uv sync --all-extras
 uv run umich-transit-demo
 ```
 
-This creates a separate `data/demo-transit.db`, opens
-`http://127.0.0.1:8000`, and clearly labels the synthetic-but-realistic demo
-data. Search for **Central Campus Transit Center**, **Pierpont Commons**, or
-**Bursley Hall**, then switch to **Accuracy proof** to see the held-out
-evaluation.
+The dashboard opens at [http://127.0.0.1:8000](http://127.0.0.1:8000).
+Search for **Central Campus Transit Center**, **Pierpont Commons**, or
+**Bursley Hall**.
 
-For the same deterministic evidence through MCP, configure your client to run
-`uv run umich-transit-demo-mcp`. It uses its own
-`data/demo-transit-mcp.db`, so the conversational and dashboard demos remain
-isolated from live observations.
+The demo uses sample history and generates fresh upcoming arrivals on every
+request. It is stored separately from real observations and is marked
+**Sample times** in the header.
 
-The demo timeline is shifted relative to startup, so arrivals stay upcoming
-while historical intervals and expected metrics remain deterministic. Demo data
-never touches the live database.
+## What you can do
 
-## What makes the result credible
+### Know when to leave
 
-1. **Capture predictions.** The poller batches Magic Bus predictions every 120
-   seconds and retains their capture time.
-2. **Infer arrivals.** Vehicle GPS is sampled every 30 seconds. Entering within
-   30 metres of a route stop emits an arrival; the vehicle must leave 50 metres
-   before it can trigger again.
-3. **Grade one rider decision point.** Each arrival is matched to the eligible
-   prediction closest to five minutes beforehand, within a ±90-second tolerance.
-   Predictions cannot be reused.
-4. **Learn explainable bias.** The correction is a clamped median signed error.
-   It tries route + stop + weekday + hour first, then two broader route-level
-   fallbacks. High confidence requires 30 exact samples; medium requires 20
-   fallback samples; low confidence leaves the published ETA unchanged.
-5. **Test on the future.** The oldest 80% of outcomes trains frozen profiles;
-   the newest 20% is held out. Published and adjusted mean/median absolute
-   error, bias, and within-two-minutes rate are reported overall and for routes
-   with at least 20 held-out arrivals.
+Search for a campus stop, choose how many minutes it takes to walk there, and
+see when you should leave. Each arrival shows:
 
-All time buckets use `America/Detroit`. The matching rule, model, thresholds,
-and report versions are visible in stored derived artifacts and API responses.
+- The published arrival time
+- A history-adjusted estimate when enough evidence exists
+- High, medium, or low confidence
+- The number of past arrivals supporting the estimate
+- A plain-language explanation of why the time changed
+- A warning when the real feed has stopped updating
 
-## Product surfaces
+Favorite stops and walking times stay in the browser.
 
-### Dashboard
+### Check whether the estimates are really better
 
-```bash
-uv run umich-transit-web
-```
+The **Accuracy Proof** view tests the approach instead of assuming it works.
+The oldest 80% of arrivals builds the correction; the newest 20% remains
+unseen until evaluation.
 
-The mobile-friendly page has two views:
+It compares published and adjusted results using:
 
-- **Live board:** stop search, browser-local favorites, per-stop walk time,
-  when-to-leave guidance, published versus adjusted ETA, confidence,
-  explanation, and stale-feed status.
-- **Accuracy proof:** overall and route-level held-out results plus the visible
-  80/20 methodology.
+- Mean and median absolute error
+- Remaining early/late bias
+- Percentage of arrivals within two minutes
+- Overall and route-level results
 
-If Magic Bus fails, the browser keeps the last good board and shows a retry
-notice instead of replacing useful information with an empty state.
+The dashboard reports **improved**, **tied**, or **worsened**. It does not hide
+a negative result.
 
-### MCP
+## How it works
 
-| Tool | Purpose |
+1. **Record published estimates.** The poller saves what the bus system
+   predicted and when the prediction was made.
+2. **Detect actual arrivals.** Vehicle GPS observations identify when a bus
+   enters a stop area. Hysteresis prevents a bus waiting at a stop from being
+   counted repeatedly.
+3. **Compare the same rider decision point.** Each arrival is matched to the
+   eligible prediction closest to five minutes beforehand, within a
+   ±90-second window. A prediction cannot be reused.
+4. **Learn recurring differences.** The correction is the median historical
+   early/late error for that route, stop, weekday, and hour. Broader route
+   history is used only when the exact group is too small.
+5. **Adjust carefully.** High confidence requires 30 exact examples. Medium
+   confidence requires 20 examples from a broader group. With less evidence,
+   the published time is left unchanged.
+
+Time groups use `America/Detroit`. Adjustments are limited to ±10 minutes, and
+all matching and model versions are stored with the generated analytics.
+
+## Dashboard and MCP
+
+Both interfaces call the same `TransitService`, so conversational answers and
+the dashboard use identical arrival and accuracy logic.
+
+| MCP tool | What it answers |
 |---|---|
-| `list_routes` | List seeded routes, optionally by agency |
-| `find_stops` | Search stops by name or proximity |
-| `get_arrivals` | Live published and evidence-adjusted ETAs with explanations |
-| `route_reliability` | Historical on-time rate and delay summary |
-| `prediction_accuracy` | Held-out published-versus-adjusted accuracy, optionally by route |
+| `list_routes` | Which routes are available? |
+| `find_stops` | Which stops match a name or nearby location? |
+| `get_arrivals` | When is the next bus, was its time adjusted, and why? |
+| `route_reliability` | How often is this route on time? |
+| `prediction_accuracy` | Did adjusted times beat published times on future arrivals? |
 
-The earlier approximate trip planner is intentionally not registered: it did
-not validate direction or calculate travel time, so exposing it would overstate
-what the project can do.
-
-Claude Desktop configuration:
+To try the sample dataset through MCP:
 
 ```json
 {
   "mcpServers": {
-    "umich-transit": {
+    "trueblue-transit": {
       "command": "uv",
       "args": ["run", "umich-transit-demo-mcp"],
       "cwd": "/absolute/path/to/umich-transit-mcp"
@@ -108,45 +110,54 @@ Claude Desktop configuration:
 }
 ```
 
-Replace `umich-transit-demo-mcp` with `umich-transit-mcp` when you want the
-configured live database and Magic Bus API.
+Questions to try:
 
-Good questions to try:
-
-- “When is the next Commuter North bus at CCTC, and why did you adjust it?”
-- “How fresh is that prediction?”
-- “Do adjusted predictions actually beat Magic Bus overall?”
-- “Does the correction help on route CN specifically?”
+- “When is the next Commuter North bus at CCTC?”
+- “Why was that arrival time changed?”
+- “How fresh is the bus information?”
+- “Are the adjusted estimates more accurate overall?”
+- “Does the correction help route CN?”
 
 ## Architecture
 
 ```text
-BusTime predictions ──┐
-                     ├─> SQLite raw observations ─> matched outcomes
-Vehicle GPS ─────────┘                              │
-                                                    ├─> reliability profiles
-                                                    └─> holdout evaluation
-                                                              │
-                                ┌─────────────────────────────┴──────────┐
-                                ▼                                        ▼
-                         FastAPI dashboard                          MCP server
+Published estimates ──┐
+                     ├──> SQLite observations ──> matched outcomes
+Vehicle locations ───┘                               │
+                                                     ├──> reliability profiles
+                                                     └──> accuracy evaluation
+                                                                  │
+                                     ┌────────────────────────────┴────────┐
+                                     ▼                                     ▼
+                              FastAPI dashboard                       MCP server
 ```
 
-- `core/` owns normalization, storage, matching, profiles, evaluation, and the
-  shared `TransitService` API.
-- `poller/` owns continuous collection, arrival detection, and analytics
-  refreshes.
-- `web/` and `mcp_server/` are thin presentation layers with no reliability
-  math or SQL.
-- SQLite WAL mode is the only supported database for this local milestone.
+- `core/` owns clients, storage, matching, reliability profiles, evaluation,
+  and the shared service API.
+- `poller/` records predictions and positions, detects arrivals, and rebuilds
+  derived analytics.
+- `web/` presents the responsive dashboard without containing reliability
+  calculations or SQL.
+- `mcp_server/` registers five focused, read-only tools over the shared service.
 
 Raw predictions and arrivals are the source of truth. Outcomes, profiles, and
-evaluation reports are derived and rebuildable.
+evaluation reports are versioned, derived data that can be rebuilt.
 
-## Collect live data
+## Engineering highlights
 
-Register for a free BusTime API key through the Magic Bus developer portal,
-then:
+- Deterministic, one-command demo with an isolated SQLite database
+- Responsive dashboard verified at desktop and mobile breakpoints
+- Evidence-based fallback hierarchy instead of an opaque model
+- Chronological evaluation that prevents training/test leakage
+- Explicit low-confidence and insufficient-evidence states
+- Last-good-board behavior during upstream failures
+- Five-minute stale-feed detection for real observations
+- Alembic migrations for outcomes, profiles, and evaluation reports
+- Strict MyPy, Ruff, integration tests, and a black-box showcase smoke check
+
+## Use real Magic Bus data
+
+Register for a BusTime API key through the Magic Bus developer portal, then:
 
 ```bash
 cp .env.example .env
@@ -158,27 +169,20 @@ uv run python scripts/seed_static_data.py
 uv run umich-transit-poller
 ```
 
-Run `uv run umich-transit-web` in another terminal. Analytics refresh when the
-poller starts and every 24 hours. Confidence and evaluation coverage grow as
-real observations accumulate.
+In another terminal:
 
-For always-on collection, the repository includes Docker, systemd, and launchd
-options in [docs/DEPLOY.md](docs/DEPLOY.md).
+```bash
+uv run umich-transit-web
+```
 
-## Known limitations
+The poller begins building real history immediately. Adjustments remain off
+until a group reaches its evidence threshold. Analytics refresh when the
+poller starts and every 24 hours.
 
-- GPS polling can miss a bus that passes a stop entirely between samples.
-- The proximity detector is intentionally conservative but is not ground-truth
-  schedule telemetry.
-- Detector hysteresis state is in memory and resets with the poller.
-- BusTime timestamps are ambiguous during the repeated DST fall-back hour; the
-  earlier offset is used.
-- Sparse routes or time bins remain unadjusted rather than borrowing a
-  cross-route global correction.
-- Transfers, full trip planning, TheRide integration, accounts, Postgres, and
-  public hosting are deferred.
+For deployment options already included in the repository, see
+[docs/DEPLOY.md](docs/DEPLOY.md).
 
-## Verification
+## Verify the project
 
 ```bash
 uv run python scripts/smoke_showcase.py
@@ -187,16 +191,27 @@ uv run ruff check .
 uv run mypy src
 ```
 
-The smoke command builds an isolated demo database, exercises web health,
-search, accuracy, and static assets, and verifies the public MCP tool surface.
+The smoke check creates an isolated demo database, exercises the dashboard
+health, search, accuracy, and static assets, and verifies the MCP tool surface.
 
-## Two-minute demo flow
+## Current limitations
+
+- GPS polling can miss a bus that passes a stop entirely between observations.
+- Proximity detection is a careful estimate, not official arrival telemetry.
+- Detector state is kept in memory and resets with the poller.
+- Sparse routes and time groups remain unadjusted.
+- BusTime timestamps are ambiguous during the repeated fall-back DST hour.
+- Transfers, full trip planning, TheRide integration, accounts, Postgres, and
+  public hosting are intentionally outside the current local showcase.
+
+## Two-minute walkthrough
 
 1. Run `uv run umich-transit-demo`.
-2. Search for CCTC and compare the published and adjusted arrival guidance.
-3. Open **Accuracy proof** and explain the chronological 80/20 split.
-4. Ask the equivalent arrival and accuracy questions through MCP.
-5. Show that both surfaces use `TransitService`, then run the smoke command.
+2. Search for CCTC and compare the published and adjusted arrival.
+3. Change the walking time and show the “leave in” guidance.
+4. Open **Accuracy Proof** and explain the 80/20 past-versus-future test.
+5. Ask the same arrival or accuracy question through MCP.
+6. Run the smoke check to finish with automated evidence.
 
 ## License
 
