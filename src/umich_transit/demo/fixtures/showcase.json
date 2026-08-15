@@ -1,0 +1,141 @@
+{
+  "version": 1,
+  "reference_time": "2026-08-15T16:00:00Z",
+  "routes": [
+    {
+      "id": "CN",
+      "agency": "mbus",
+      "short_name": "CN",
+      "long_name": "Commuter North",
+      "color": "#FFCB05"
+    },
+    {
+      "id": "BB",
+      "agency": "mbus",
+      "short_name": "BB",
+      "long_name": "Bursley-Baits",
+      "color": "#2F65A7"
+    }
+  ],
+  "stops": [
+    {
+      "id": "CCTC",
+      "agency": "mbus",
+      "name": "Central Campus Transit Center",
+      "lat": 42.2786,
+      "lon": -83.7346
+    },
+    {
+      "id": "PIER",
+      "agency": "mbus",
+      "name": "Pierpont Commons",
+      "lat": 42.2914,
+      "lon": -83.7177
+    },
+    {
+      "id": "BURS",
+      "agency": "mbus",
+      "name": "Bursley Hall",
+      "lat": 42.2936,
+      "lon": -83.7202
+    }
+  ],
+  "arrivals": [
+    {
+      "stop_id": "CCTC",
+      "route_id": "CN",
+      "vehicle_id": "demo-cn-1",
+      "published_offset_min": 4,
+      "adjusted_offset_min": 8,
+      "on_time_pct": 0.64,
+      "sample_size": 72,
+      "confidence": "high",
+      "aggregation_scope": "route_stop_weekday_hour",
+      "adjustment_reason": "This route is typically 4 minutes late here around this hour."
+    },
+    {
+      "stop_id": "CCTC",
+      "route_id": "BB",
+      "vehicle_id": "demo-bb-1",
+      "published_offset_min": 9,
+      "adjusted_offset_min": 9,
+      "on_time_pct": null,
+      "sample_size": 8,
+      "confidence": "low",
+      "aggregation_scope": null,
+      "adjustment_reason": "Not enough history yet; showing the published estimate."
+    },
+    {
+      "stop_id": "CCTC",
+      "route_id": "CN",
+      "vehicle_id": "demo-cn-2",
+      "published_offset_min": 16,
+      "adjusted_offset_min": 18,
+      "on_time_pct": 0.64,
+      "sample_size": 72,
+      "confidence": "high",
+      "aggregation_scope": "route_stop_weekday_hour",
+      "adjustment_reason": "This route is typically 2 minutes late here around this hour."
+    },
+    {
+      "stop_id": "PIER",
+      "route_id": "CN",
+      "vehicle_id": "demo-cn-3",
+      "published_offset_min": 6,
+      "adjusted_offset_min": 10,
+      "on_time_pct": 0.61,
+      "sample_size": 58,
+      "confidence": "high",
+      "aggregation_scope": "route_stop_weekday_hour",
+      "adjustment_reason": "This route is typically 4 minutes late here around this hour."
+    },
+    {
+      "stop_id": "BURS",
+      "route_id": "BB",
+      "vehicle_id": "demo-bb-2",
+      "published_offset_min": 5,
+      "adjusted_offset_min": 5,
+      "on_time_pct": null,
+      "sample_size": 11,
+      "confidence": "low",
+      "aggregation_scope": null,
+      "adjustment_reason": "Not enough history yet; showing the published estimate."
+    }
+  ],
+  "accuracy": {
+    "status": "illustrative",
+    "data_source": "demo",
+    "sample_count": 120,
+    "training_range": "Illustrative training window",
+    "evaluation_range": "Illustrative holdout window",
+    "headline": "In this demo dataset, the transparent correction reduces average error by 72 seconds.",
+    "published": {
+      "mean_absolute_error_s": 198,
+      "median_absolute_error_s": 174,
+      "mean_error_s": 142,
+      "within_two_minutes_pct": 0.43
+    },
+    "adjusted": {
+      "mean_absolute_error_s": 126,
+      "median_absolute_error_s": 108,
+      "mean_error_s": 28,
+      "within_two_minutes_pct": 0.68
+    },
+    "routes": [
+      {
+        "route_id": "CN",
+        "sample_count": 72,
+        "published_mae_s": 214,
+        "adjusted_mae_s": 131,
+        "classification": "improved"
+      },
+      {
+        "route_id": "BB",
+        "sample_count": 48,
+        "published_mae_s": 174,
+        "adjusted_mae_s": 119,
+        "classification": "improved"
+      }
+    ]
+  }
+}
