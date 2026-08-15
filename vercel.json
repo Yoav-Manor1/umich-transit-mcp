@@ -1,0 +1,15 @@
+{
+  "$schema": "https://openapi.vercel.sh/vercel.json",
+  "env": {
+    "TRANSIT_APP_MODE": "demo"
+  },
+  "functions": {
+    "app.py": {
+      "includeFiles": [
+        "src/umich_transit/demo/fixtures/**",
+        "src/umich_transit/web/static/**"
+      ],
+      "maxDuration": 30
+    }
+  }
+}

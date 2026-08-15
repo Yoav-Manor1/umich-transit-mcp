@@ -30,6 +30,7 @@ def build_app(
     svc: WebTransitService | TransitService | None = None,
     *,
     app_mode: str | None = None,
+    managed_http: httpx.AsyncClient | None = None,
 ) -> FastAPI:
     @asynccontextmanager
     async def lifespan(app: FastAPI) -> AsyncIterator[None]:
@@ -54,7 +55,7 @@ def build_app(
 
     app = FastAPI(title="U-Mich Transit Dashboard", lifespan=lifespan)
     app.state.svc = cast(WebTransitService | None, svc)
-    app.state.http = None
+    app.state.http = managed_http
 
     @app.get("/api/health")
     def health() -> dict[str, str]:

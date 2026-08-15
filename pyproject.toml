@@ -58,3 +58,6 @@ exclude = ["src/umich_transit/core/storage/migrations/"]
 [tool.pytest.ini_options]
 testpaths = ["tests"]
 asyncio_mode = "auto"
+
+[tool.vercel]
+entrypoint = "app:app"

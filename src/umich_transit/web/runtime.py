@@ -3,6 +3,7 @@
 from typing import Literal, cast
 
 import httpx
+from fastapi import FastAPI
 
 from umich_transit.config import Settings
 from umich_transit.core.clients.mbus import MbusClient
@@ -53,3 +54,20 @@ def build_runtime_service(
         http=http,
     )
     return cast(WebTransitService, TransitService(engine=engine, mbus=mbus)), http
+
+
+def build_runtime_app(config: Settings | None = None) -> FastAPI:
+    """Build the FastAPI application selected by environment configuration."""
+    from umich_transit.web.app import build_app
+
+    runtime_config = config or Settings()
+    mode = resolve_app_mode(
+        runtime_config.transit_app_mode,
+        on_vercel=runtime_config.vercel,
+    )
+    service, http = build_runtime_service(mode, runtime_config)
+    return build_app(
+        service,
+        app_mode=mode,
+        managed_http=http,
+    )
