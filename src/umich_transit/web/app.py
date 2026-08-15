@@ -12,7 +12,7 @@ from pathlib import Path
 from typing import Any, cast
 
 import httpx
-from fastapi import FastAPI, Request
+from fastapi import FastAPI, Request, Response
 from fastapi.responses import FileResponse
 from fastapi.staticfiles import StaticFiles
 
@@ -63,6 +63,25 @@ def build_app(
             response["mode"] = app_mode
         return response
 
+    @app.get("/api/ready")
+    def ready(request: Request, response: Response) -> dict[str, Any]:
+        response.headers["Cache-Control"] = "no-store"
+        svc: WebTransitService = request.app.state.svc
+        result = svc.readiness()
+        if result.get("status") != "ready":
+            response.status_code = 503
+        return result
+
+    @app.get("/api/accuracy")
+    def accuracy(
+        request: Request,
+        response: Response,
+        route_id: str | None = None,
+    ) -> dict[str, Any]:
+        response.headers["Cache-Control"] = "no-store"
+        svc: WebTransitService = request.app.state.svc
+        return svc.prediction_accuracy(route_id=route_id)
+
     @app.get("/api/stops/search")
     def search_stops(request: Request, q: str = "", limit: int = 8) -> dict[str, Any]:
         svc: WebTransitService = request.app.state.svc
@@ -70,8 +89,13 @@ def build_app(
 
     @app.get("/api/arrivals")
     async def arrivals(
-        request: Request, stop_id: str, walk_min: int = 5, limit: int = 5
+        request: Request,
+        response: Response,
+        stop_id: str,
+        walk_min: int = 5,
+        limit: int = 5,
     ) -> dict[str, Any]:
+        response.headers["Cache-Control"] = "no-store"
         svc: WebTransitService = request.app.state.svc
         now = datetime.now(UTC)
         try:

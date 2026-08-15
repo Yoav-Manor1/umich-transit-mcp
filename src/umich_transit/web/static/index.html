@@ -3,45 +3,153 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>U-M Buses</title>
+  <meta name="description" content="Evidence-backed arrival guidance for University of Michigan buses.">
+  <title>Honest ETA - U-M Transit Reliability</title>
   <link rel="stylesheet" href="/static/style.css">
 </head>
 <body>
-  <div class="app">
-    <header class="topbar">
-      <span class="brand">🚌 U-M Buses</span>
-      <span id="updated" class="updated"></span>
-    </header>
+  <header class="site-header">
+    <a class="brand" href="/" aria-label="Honest ETA home">
+      <span class="brand-mark" aria-hidden="true">H</span>
+      <span>Honest ETA</span>
+    </a>
+    <nav class="header-links" aria-label="Project links">
+      <span id="mode-badge" class="mode-badge">Demo data</span>
+      <a href="#methodology">How it works</a>
+      <a href="https://github.com/Yoav-Manor1/umich-transit-mcp">GitHub</a>
+    </nav>
+  </header>
 
-    <div class="search-wrap">
-      <input id="search" class="search" autocomplete="off"
-             placeholder="Search a stop to add… (e.g. Pierpont)">
-      <div id="results" class="results"></div>
-    </div>
-
-    <div id="chips" class="chips"></div>
-    <div id="note" class="note" style="display:none"></div>
-
-    <div id="empty" class="empty" style="display:none">
-      <p>No stops yet.<br>Search above to add your first stop.</p>
-    </div>
-
-    <div id="board" class="board" style="display:none">
-      <div class="stop-head">
-        <span id="stop-name" class="stop-name"></span>
-        <span id="walk-label" class="walk"></span>
+  <main>
+    <section class="hero" aria-labelledby="hero-title">
+      <p class="eyebrow">U-M TRANSIT RELIABILITY</p>
+      <h1 id="hero-title">Magic Bus says four minutes.<br>History suggests eight.</h1>
+      <p class="hero-copy">
+        Honest ETA compares live bus predictions with what actually happened at
+        this route, stop, weekday, and hour - then shows the evidence behind any adjustment.
+      </p>
+      <div class="hero-proof" aria-label="Project highlights">
+        <span>Live prediction feed</span>
+        <span>GPS-inferred arrivals</span>
+        <span>Confidence-aware corrections</span>
       </div>
-      <div id="banner" class="banner" style="display:none">
-        <span class="banner-ico">⏱️</span>
-        <div>
-          <div class="banner-main"></div>
-          <div class="banner-sub"></div>
+    </section>
+
+    <section class="showcase" aria-label="Transit reliability demo">
+      <div class="demo-notice" id="demo-notice">
+        <strong>Demo data</strong>
+        <span>This public preview uses illustrative, deterministic data - not a real performance claim.</span>
+      </div>
+
+      <div class="tabs" role="tablist" aria-label="Showcase views">
+        <button id="live-tab" class="tab active" role="tab" aria-selected="true"
+                aria-controls="live-view">Live board</button>
+        <button id="accuracy-tab" class="tab" role="tab" aria-selected="false"
+                aria-controls="accuracy-view">Accuracy</button>
+      </div>
+
+      <section id="live-view" class="view" role="tabpanel" aria-labelledby="live-tab">
+        <div class="panel-heading">
+          <div>
+            <p class="section-kicker">NEXT ARRIVALS</p>
+            <h2>When should you actually leave?</h2>
+          </div>
+          <span id="updated" class="updated" aria-live="polite"></span>
         </div>
+
+        <div class="search-wrap">
+          <label class="sr-only" for="search">Search bus stops</label>
+          <input id="search" class="search" autocomplete="off"
+                 placeholder="Search a stop, like Pierpont Commons">
+          <div id="results" class="results"></div>
+        </div>
+
+        <div id="chips" class="chips" aria-label="Saved stops"></div>
+        <div id="note" class="note" role="status" style="display:none"></div>
+
+        <div id="empty" class="empty" style="display:none">
+          <p>Search above to choose a stop.</p>
+        </div>
+
+        <div id="board" class="board" style="display:none">
+          <div class="stop-head">
+            <div>
+              <span id="stop-name" class="stop-name"></span>
+              <span id="walk-label" class="walk"></span>
+            </div>
+          </div>
+          <div id="banner" class="leave-banner" style="display:none">
+            <span class="leave-label">WHEN TO LEAVE</span>
+            <div class="banner-main"></div>
+            <div class="banner-sub"></div>
+          </div>
+          <div class="arrival-head" aria-hidden="true">
+            <span>Route</span><span>Published</span><span>Evidence-backed</span>
+          </div>
+          <div id="arrivals" class="arrivals"></div>
+          <div class="board-foot">Refreshes every 60 seconds</div>
+        </div>
+      </section>
+
+      <section id="accuracy-view" class="view" role="tabpanel"
+               aria-labelledby="accuracy-tab" hidden>
+        <div class="panel-heading">
+          <div>
+            <p class="section-kicker">HELD-OUT COMPARISON</p>
+            <h2>Does the adjustment actually help?</h2>
+          </div>
+        </div>
+        <p id="accuracy-headline" class="accuracy-headline"></p>
+        <div class="metric-grid">
+          <article class="metric-card published-card">
+            <span>Published ETA error</span>
+            <strong id="published-mae">-</strong>
+            <small>mean absolute error</small>
+          </article>
+          <article class="metric-card adjusted-card">
+            <span>Adjusted ETA error</span>
+            <strong id="adjusted-mae">-</strong>
+            <small>mean absolute error</small>
+          </article>
+          <article class="metric-card">
+            <span>Within two minutes</span>
+            <strong id="within-two">-</strong>
+            <small id="within-two-detail">published vs adjusted</small>
+          </article>
+        </div>
+        <div class="evidence-row">
+          <span id="sample-count"></span>
+          <span>Chronological 80/20 split</span>
+          <span>No holdout leakage</span>
+        </div>
+        <div id="route-results" class="route-results"></div>
+        <p class="illustrative-note">
+          Demo results are illustrative. Live deployments publish real metrics only after enough
+          chronologically held-out observations exist.
+        </p>
+      </section>
+    </section>
+
+    <section id="methodology" class="methodology" aria-labelledby="methodology-title">
+      <p class="eyebrow">How it works</p>
+      <h2 id="methodology-title">From optimistic prediction to accountable estimate</h2>
+      <div class="steps">
+        <article><span>01</span><h3>Observe</h3><p>Log published predictions and live vehicle positions continuously.</p></article>
+        <article><span>02</span><h3>Measure</h3><p>Infer real arrivals with GPS hysteresis and grade earlier predictions.</p></article>
+        <article><span>03</span><h3>Explain</h3><p>Apply transparent historical bias only when the sample supports it.</p></article>
       </div>
-      <div id="arrivals" class="arrivals"></div>
-      <div class="foot">↻ Auto-updates every 60 sec</div>
-    </div>
-  </div>
+      <p class="method-link">
+        The same typed service powers this dashboard and five Model Context Protocol tools.
+        <a href="https://github.com/Yoav-Manor1/umich-transit-mcp#how-reliability-scoring-works">Read the methodology</a>.
+      </p>
+    </section>
+  </main>
+
+  <footer>
+    <span>Built by Yoav Manor</span>
+    <a href="https://github.com/Yoav-Manor1/umich-transit-mcp">Source and tests</a>
+  </footer>
+
   <script src="/static/app.js"></script>
 </body>
 </html>

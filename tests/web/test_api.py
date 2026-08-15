@@ -9,6 +9,7 @@ from umich_transit.core.clients.mbus import BusTimeError
 from umich_transit.core.service import TransitService
 from umich_transit.core.storage.db import create_engine_for_url, session_scope
 from umich_transit.core.storage.models import Base, Route, Stop
+from umich_transit.demo.service import DemoTransitService
 from umich_transit.web.app import build_app
 
 
@@ -37,6 +38,39 @@ def test_health_reports_application_mode_when_supplied():
     assert client.get("/api/health").json() == {"status": "ok", "mode": "demo"}
 
 
+def test_demo_readiness_is_visible():
+    client = TestClient(build_app(DemoTransitService(), app_mode="demo"))
+    response = client.get("/api/ready")
+    assert response.status_code == 200
+    assert response.json() == {
+        "status": "ready",
+        "mode": "demo",
+        "data_source": "versioned_fixture",
+        "fixture_version": 1,
+    }
+    assert response.headers["cache-control"] == "no-store"
+
+
+def test_unready_live_service_returns_503():
+    class UnreadyService(DemoTransitService):
+        def readiness(self):
+            return {"status": "unavailable", "mode": "live"}
+
+    client = TestClient(build_app(UnreadyService(), app_mode="live"))
+    response = client.get("/api/ready")
+    assert response.status_code == 503
+    assert response.json()["status"] == "unavailable"
+
+
+def test_demo_accuracy_is_labeled_illustrative():
+    client = TestClient(build_app(DemoTransitService(), app_mode="demo"))
+    response = client.get("/api/accuracy")
+    assert response.status_code == 200
+    assert response.json()["status"] == "illustrative"
+    assert response.json()["data_source"] == "demo"
+    assert response.headers["cache-control"] == "no-store"
+
+
 def test_search_returns_matching_stops():
     client = TestClient(build_app(_service()))
     r = client.get("/api/stops/search", params={"q": "central"})
@@ -57,6 +91,7 @@ def test_arrivals_returns_board_and_leave():
     assert body["arrivals"][0]["route_id"] == "CN"
     assert body["leave"]["route_id"] == "CN"
     assert body["leave"]["leave_in_min"] in (3, 4)  # ~6 min ETA minus 2 min walk
+    assert r.headers["cache-control"] == "no-store"
 
 
 def test_arrivals_degrades_gracefully_on_upstream_error():
