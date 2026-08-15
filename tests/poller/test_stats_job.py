@@ -29,7 +29,7 @@ def engine():
 def _seed_pair(session, *, dow_hour: datetime, late_seconds: int) -> None:
     """Insert one prediction + one arrival representing the same trip."""
     arrival = dow_hour
-    prediction_captured = arrival - timedelta(seconds=60)
+    prediction_captured = arrival - timedelta(seconds=300)
     predicted = arrival - timedelta(seconds=late_seconds)
     session.add(Prediction(
         route_id="r1", stop_id="s1", vehicle_id="v1",

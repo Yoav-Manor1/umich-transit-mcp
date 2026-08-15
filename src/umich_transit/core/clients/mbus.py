@@ -58,6 +58,18 @@ def _chunked(items: list[str], size: int) -> Iterator[list[str]]:
         yield items[i : i + size]
 
 
+def _eta_from_prd(raw: dict[str, Any], fallback_stop_id: str = "") -> EtaRecord:
+    """Build an EtaRecord from one BusTime `prd` entry. When querying many stops
+    each entry carries its own `stpid`; the single-stop path passes a fallback."""
+    return EtaRecord(
+        route_id=str(raw.get("rt") or ""),
+        stop_id=str(raw.get("stpid") or fallback_stop_id),
+        vehicle_id=str(raw.get("vid") or ""),
+        predicted_arrival_at=_parse_ts(str(raw["prdtm"])),
+        captured_at=_parse_ts(str(raw["tmstmp"])),
+    )
+
+
 class MbusClient:
     def __init__(self, *, base_url: str, api_key: str, http: httpx.AsyncClient) -> None:
         self._base = base_url.rstrip("/") + API_PATH
@@ -137,15 +149,16 @@ class MbusClient:
         return out
 
     async def get_etas(self, stop_id: str) -> list[EtaRecord]:
-        """Upcoming arrival predictions for a stop (BusTime getpredictions)."""
+        """Upcoming arrival predictions for a single stop (BusTime getpredictions)."""
         body = await self._get("/getpredictions", stpid=stop_id)
+        return [_eta_from_prd(raw, stop_id) for raw in body.get("prd", [])]
+
+    async def get_etas_for_stops(self, stop_ids: list[str]) -> list[EtaRecord]:
+        """Predictions for many stops in one sweep. BusTime getpredictions accepts
+        up to 10 comma-separated stpid per call, so this issues ceil(N/10) requests
+        instead of N — the main lever on daily API-quota usage."""
         out: list[EtaRecord] = []
-        for raw in body.get("prd", []):
-            out.append(EtaRecord(
-                route_id=str(raw.get("rt") or ""),
-                stop_id=str(raw.get("stpid") or stop_id),
-                vehicle_id=str(raw.get("vid") or ""),
-                predicted_arrival_at=_parse_ts(str(raw["prdtm"])),
-                captured_at=_parse_ts(str(raw["tmstmp"])),
-            ))
+        for chunk in _chunked(stop_ids, 10):
+            body = await self._get("/getpredictions", stpid=",".join(chunk))
+            out.extend(_eta_from_prd(raw) for raw in body.get("prd", []))
         return out

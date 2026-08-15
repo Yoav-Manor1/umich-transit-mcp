@@ -5,10 +5,16 @@ from unittest.mock import AsyncMock
 import pytest
 
 from umich_transit.core.clients.base import EtaRecord
-from umich_transit.core.reliability import BinKey
 from umich_transit.core.service import TransitService
 from umich_transit.core.storage.db import create_engine_for_url, session_scope
-from umich_transit.core.storage.models import Base, ReliabilityStat, Route, Stop
+from umich_transit.core.storage.models import (
+    Base,
+    EvaluationReportRow,
+    ReliabilityProfileRow,
+    ReliabilityStat,
+    Route,
+    Stop,
+)
 
 
 @pytest.fixture
@@ -22,14 +28,13 @@ def engine():
     return eng
 
 
-async def test_get_arrivals_adjusts_with_reliability_stat(engine):
+async def test_get_arrivals_explains_high_confidence_profile(engine):
     now = datetime(2026, 5, 1, 18, 0, tzinfo=UTC)  # fixed instant for determinism
-    key = BinKey.from_timestamp(route_id="r1", stop_id="s1", at=now)
     with session_scope(engine) as s:
-        s.add(ReliabilityStat(
-            route_id="r1", stop_id="s1", dow=key.dow, hour=key.hour,
-            on_time_pct=0.8, mean_delay_s=180,
-            p50_delay_s=120, p90_delay_s=400, sample_count=60,
+        s.add(ReliabilityProfileRow(
+            profile_key="exact", scope="route_stop_dow_hour",
+            route_id="r1", stop_id="s1", dow=4, hour=14,
+            correction_s=180, sample_count=60,
             updated_at=now,
         ))
     fake_client = AsyncMock()
@@ -44,6 +49,35 @@ async def test_get_arrivals_adjusts_with_reliability_stat(engine):
     assert a["confidence"] == "high"
     assert a["adjusted_arrival_at"] == a["predicted_arrival_at"] + timedelta(seconds=180)
     assert a["sample_size"] == 60
+    assert a["adjustment_scope"] == "route_stop_dow_hour"
+    assert a["correction_s"] == 180
+    assert "3 minutes late" in a["adjustment_reason"]
+    assert a["data_age_s"] == 0
+    assert a["is_stale"] is False
+
+
+async def test_get_arrivals_uses_expected_arrival_hour_for_profile(engine):
+    now = datetime(2026, 5, 1, 17, 58, tzinfo=UTC)  # 13:58 in Detroit
+    expected = now + timedelta(minutes=5)  # 14:03 in Detroit
+    with session_scope(engine) as s:
+        s.add(ReliabilityProfileRow(
+            profile_key="next-hour", scope="route_stop_dow_hour",
+            route_id="r1", stop_id="s1", dow=4, hour=14,
+            correction_s=120, sample_count=40,
+            updated_at=now,
+        ))
+    fake_client = AsyncMock()
+    fake_client.get_etas = AsyncMock(return_value=[
+        EtaRecord(route_id="r1", stop_id="s1", vehicle_id="v1",
+                  predicted_arrival_at=expected, captured_at=now),
+    ])
+
+    arrivals = await TransitService(engine=engine, mbus=fake_client).get_arrivals(
+        stop_id="s1", now=now,
+    )
+
+    assert arrivals[0]["confidence"] == "high"
+    assert arrivals[0]["correction_s"] == 120
 
 
 async def test_get_arrivals_low_confidence_when_no_stat(engine):
@@ -58,6 +92,9 @@ async def test_get_arrivals_low_confidence_when_no_stat(engine):
     assert arrivals[0]["confidence"] == "low"
     assert arrivals[0]["adjusted_arrival_at"] == arrivals[0]["predicted_arrival_at"]
     assert arrivals[0]["sample_size"] == 0
+    assert arrivals[0]["adjustment_scope"] is None
+    assert arrivals[0]["correction_s"] == 0
+    assert "not enough history" in arrivals[0]["adjustment_reason"]
 
 
 async def test_get_arrivals_filters_by_route(engine):
@@ -114,3 +151,70 @@ def test_route_reliability_no_data(engine):
     svc = TransitService(engine=engine, mbus=AsyncMock())
     r = svc.route_reliability(route_id="ghost")
     assert r["sample_count"] == 0
+
+
+def test_prediction_accuracy_returns_latest_holdout_report(engine):
+    now = datetime(2026, 5, 1, 18, 0, tzinfo=UTC)
+    with session_scope(engine) as s:
+        s.add(EvaluationReportRow(
+            generated_at=now, status="ready", total_sample_count=100,
+            training_sample_count=80, holdout_sample_count=20,
+            match_version="fixed-horizon-v1", model_version="median-hierarchy-v1",
+            metrics_json={
+                "classification": "improved",
+                "published": {"mean_absolute_error_s": 180.0},
+                "adjusted": {"mean_absolute_error_s": 90.0},
+                "routes": {
+                    "r1": {
+                        "classification": "improved",
+                        "published": {"mean_absolute_error_s": 200.0},
+                        "adjusted": {"mean_absolute_error_s": 80.0},
+                    },
+                },
+            },
+        ))
+    svc = TransitService(engine=engine, mbus=AsyncMock())
+
+    report = svc.prediction_accuracy()
+
+    assert report["status"] == "ready"
+    assert report["holdout_sample_count"] == 20
+    assert report["metrics"]["classification"] == "improved"
+    assert report["generated_at"] == now
+
+
+def test_prediction_accuracy_can_filter_to_qualifying_route(engine):
+    now = datetime(2026, 5, 1, 18, 0, tzinfo=UTC)
+    with session_scope(engine) as s:
+        s.add(EvaluationReportRow(
+            generated_at=now, status="ready", total_sample_count=100,
+            training_sample_count=80, holdout_sample_count=20,
+            match_version="fixed-horizon-v1", model_version="median-hierarchy-v1",
+            metrics_json={
+                "classification": "improved",
+                "routes": {
+                    "r1": {
+                        "classification": "improved",
+                        "published": {"mean_absolute_error_s": 200.0},
+                        "adjusted": {"mean_absolute_error_s": 80.0},
+                    },
+                },
+            },
+        ))
+    svc = TransitService(engine=engine, mbus=AsyncMock())
+
+    report = svc.prediction_accuracy(route_id="r1")
+
+    assert report["route_id"] == "r1"
+    assert report["metrics"]["published"]["mean_absolute_error_s"] == 200.0
+
+
+def test_prediction_accuracy_explains_missing_evaluation(engine):
+    svc = TransitService(engine=engine, mbus=AsyncMock())
+
+    report = svc.prediction_accuracy()
+
+    assert report == {
+        "status": "insufficient_data",
+        "summary": "No evaluation report yet. Run the analytics refresh first.",
+    }

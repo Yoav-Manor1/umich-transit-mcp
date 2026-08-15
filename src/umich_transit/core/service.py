@@ -1,30 +1,23 @@
-"""Service layer: the single API surface used by MCP tools and a future HTTP
-layer. Combines live client calls with DB-backed reliability stats.
-
-The live arrival lookup bins the current time with the SAME BinKey used by the
-nightly stats job, so reads and writes always agree on the (dow, hour) bin.
-"""
+"""Shared service API for live arrivals, reliability, and held-out accuracy."""
 from datetime import UTC, datetime, timedelta
 from typing import Any
 
 from sqlalchemy import Engine, select
 
+from umich_transit.core.accuracy import ReliabilityProfile, select_adjustment
 from umich_transit.core.clients.mbus import MbusClient
 from umich_transit.core.planner import TripPlanner
-from umich_transit.core.reliability import BinKey
 from umich_transit.core.storage.db import session_scope
-from umich_transit.core.storage.models import ReliabilityStat, RouteStop
-from umich_transit.core.storage.queries import (
-    find_stops as q_find_stops,
+from umich_transit.core.storage.models import (
+    EvaluationReportRow,
+    ReliabilityProfileRow,
+    ReliabilityStat,
+    RouteStop,
 )
-from umich_transit.core.storage.queries import (
-    get_reliability_stat,
-)
-from umich_transit.core.storage.queries import (
-    list_routes as q_list_routes,
-)
+from umich_transit.core.storage.queries import find_stops as q_find_stops
+from umich_transit.core.storage.queries import list_routes as q_list_routes
 
-CONFIDENCE_THRESHOLD = 50  # sample_count >= -> "high"
+STALE_AFTER_SECONDS = 300
 
 
 class TransitService:
@@ -74,34 +67,84 @@ class TransitService:
         out: list[dict[str, Any]] = []
         with session_scope(self._engine) as session:
             for e in live[:limit]:
-                key = BinKey.from_timestamp(
-                    route_id=e.route_id, stop_id=e.stop_id, at=moment,
+                rows = list(session.execute(
+                    select(ReliabilityProfileRow).where(
+                        ReliabilityProfileRow.route_id == e.route_id
+                    )
+                ).scalars())
+                profiles = [
+                    ReliabilityProfile(
+                        scope=row.scope,
+                        route_id=row.route_id,
+                        stop_id=row.stop_id,
+                        dow=row.dow,
+                        hour=row.hour,
+                        correction_s=row.correction_s,
+                        sample_count=row.sample_count,
+                    )
+                    for row in rows
+                ]
+                adjustment = select_adjustment(
+                    profiles,
+                    route_id=e.route_id,
+                    stop_id=e.stop_id,
+                    at=e.predicted_arrival_at,
                 )
-                stat = get_reliability_stat(
-                    session, route_id=e.route_id, stop_id=e.stop_id,
-                    dow=key.dow, hour=key.hour,
+                adjusted = e.predicted_arrival_at + timedelta(
+                    seconds=adjustment.correction_s
                 )
-                if stat is not None:
-                    adjusted = e.predicted_arrival_at + timedelta(seconds=stat.mean_delay_s)
-                    confidence = "high" if stat.sample_count >= CONFIDENCE_THRESHOLD else "low"
-                    on_time: float | None = stat.on_time_pct
-                    samples = stat.sample_count
-                else:
-                    adjusted = e.predicted_arrival_at
-                    confidence = "low"
-                    on_time = None
-                    samples = 0
+                data_age_s = max(0.0, (moment - e.captured_at).total_seconds())
                 out.append({
                     "route_id": e.route_id,
                     "stop_id": e.stop_id,
                     "vehicle_id": e.vehicle_id,
                     "predicted_arrival_at": e.predicted_arrival_at,
                     "adjusted_arrival_at": adjusted,
-                    "on_time_pct_at_this_hour": on_time,
-                    "sample_size": samples,
-                    "confidence": confidence,
+                    "on_time_pct_at_this_hour": None,
+                    "sample_size": adjustment.sample_count,
+                    "confidence": adjustment.confidence,
+                    "correction_s": adjustment.correction_s,
+                    "adjustment_scope": adjustment.scope,
+                    "adjustment_reason": _adjustment_reason(adjustment),
+                    "data_age_s": data_age_s,
+                    "is_stale": data_age_s > STALE_AFTER_SECONDS,
                 })
         return out
+
+    def prediction_accuracy(self, route_id: str | None = None) -> dict[str, Any]:
+        with session_scope(self._engine) as session:
+            report = session.execute(
+                select(EvaluationReportRow)
+                .order_by(EvaluationReportRow.generated_at.desc(), EvaluationReportRow.id.desc())
+                .limit(1)
+            ).scalar_one_or_none()
+        if report is None:
+            return {
+                "status": "insufficient_data",
+                "summary": "No evaluation report yet. Run the analytics refresh first.",
+            }
+        metrics = report.metrics_json
+        if route_id is not None:
+            routes = metrics.get("routes") if metrics is not None else None
+            route_metrics = routes.get(route_id) if isinstance(routes, dict) else None
+            if not isinstance(route_metrics, dict):
+                return {
+                    "status": "insufficient_data",
+                    "route_id": route_id,
+                    "summary": "This route does not have 20 held-out arrivals yet.",
+                }
+            metrics = route_metrics
+        return {
+            "status": report.status,
+            "route_id": route_id,
+            "generated_at": report.generated_at,
+            "total_sample_count": report.total_sample_count,
+            "training_sample_count": report.training_sample_count,
+            "holdout_sample_count": report.holdout_sample_count,
+            "match_version": report.match_version,
+            "model_version": report.model_version,
+            "metrics": metrics,
+        }
 
     async def plan_trip(
         self, *, from_stop_id: str, to_stop_id: str,
@@ -171,3 +214,14 @@ class TransitService:
                 f"avg delay {weighted_mean:.0f}s"
             ),
         }
+
+
+def _adjustment_reason(adjustment: Any) -> str:
+    if adjustment.confidence == "low":
+        return "There is not enough history to adjust this prediction."
+    minutes = abs(adjustment.correction_s) / 60
+    timing = "late" if adjustment.correction_s >= 0 else "early"
+    return (
+        f"This route is typically {minutes:g} minutes {timing} here around this hour "
+        f"({adjustment.sample_count} historical arrivals)."
+    )

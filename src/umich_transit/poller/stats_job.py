@@ -16,6 +16,7 @@ from umich_transit.core.storage.models import Arrival, ReliabilityStat
 from umich_transit.core.storage.queries import prediction_for_arrival
 
 logger = structlog.get_logger(__name__)
+MATCH_TOLERANCE_SECONDS = 90
 
 
 def recompute_all_bins(
@@ -37,9 +38,11 @@ def recompute_all_bins(
             pred = prediction_for_arrival(
                 s,
                 vehicle_id=a.vehicle_id,
+                route_id=a.route_id,
                 stop_id=a.stop_id,
                 arrival_at=a.actual_arrival_at,
-                lookback_seconds=lookback_seconds,
+                target_horizon_seconds=lookback_seconds,
+                tolerance_seconds=MATCH_TOLERANCE_SECONDS,
             )
             if pred is None:
                 unmatched += 1

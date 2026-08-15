@@ -87,32 +87,50 @@ def test_arrivals_in_window(engine):
         assert len(recent) == 1
 
 
-def test_prediction_before_arrival(engine):
+def test_prediction_for_arrival_picks_closest_to_target_horizon(engine):
     now = datetime.now(UTC)
     with session_scope(engine) as s:
         s.add(Prediction(route_id="r1", stop_id="s1", vehicle_id="v1",
                          predicted_arrival_at=now + timedelta(minutes=1),
-                         captured_at=now - timedelta(seconds=305)))
+                         captured_at=now - timedelta(seconds=310)))
         s.add(Prediction(route_id="r1", stop_id="s1", vehicle_id="v1",
                          predicted_arrival_at=now + timedelta(minutes=1),
                          captured_at=now - timedelta(seconds=10)))
     with session_scope(engine) as s:
         match = queries.prediction_for_arrival(
-            s, vehicle_id="v1", stop_id="s1",
-            arrival_at=now, lookback_seconds=300,
+            s, vehicle_id="v1", route_id="r1", stop_id="s1",
+            arrival_at=now, target_horizon_seconds=300,
+            tolerance_seconds=90,
         )
-        # Should pick the prediction captured ~5 min before arrival
         assert match is not None
-        # The 305-sec-old one is outside the lookback; the 10-sec-old one is inside.
-        assert (now - match.captured_at).total_seconds() == pytest.approx(10, abs=1)
+        assert (now - match.captured_at).total_seconds() == pytest.approx(310, abs=1)
+
+
+def test_prediction_for_arrival_requires_route_and_tolerance(engine):
+    now = datetime.now(UTC)
+    with session_scope(engine) as s:
+        s.add(Prediction(route_id="r2", stop_id="s1", vehicle_id="v1",
+                         predicted_arrival_at=now + timedelta(minutes=1),
+                         captured_at=now - timedelta(seconds=300)))
+        s.add(Prediction(route_id="r1", stop_id="s1", vehicle_id="v1",
+                         predicted_arrival_at=now + timedelta(minutes=1),
+                         captured_at=now - timedelta(seconds=100)))
+    with session_scope(engine) as s:
+        match = queries.prediction_for_arrival(
+            s, vehicle_id="v1", route_id="r1", stop_id="s1",
+            arrival_at=now, target_horizon_seconds=300,
+            tolerance_seconds=90,
+        )
+        assert match is None
 
 
 def test_prediction_for_arrival_returns_none_when_no_match(engine):
     now = datetime.now(UTC)
     with session_scope(engine) as s:
         match = queries.prediction_for_arrival(
-            s, vehicle_id="ghost", stop_id="s1",
-            arrival_at=now, lookback_seconds=300,
+            s, vehicle_id="ghost", route_id="r1", stop_id="s1",
+            arrival_at=now, target_horizon_seconds=300,
+            tolerance_seconds=90,
         )
         assert match is None
 

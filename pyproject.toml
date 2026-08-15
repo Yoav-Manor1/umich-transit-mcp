@@ -15,6 +15,8 @@ dependencies = [
     "pydantic-settings>=2.2",
     "structlog>=24.1",
     "anyio>=4.3",
+    "fastapi>=0.136.3",
+    "uvicorn[standard]>=0.48.0",
 ]
 
 [project.optional-dependencies]
@@ -30,6 +32,9 @@ dev = [
 [project.scripts]
 umich-transit-mcp    = "umich_transit.mcp_server.__main__:main"
 umich-transit-poller = "umich_transit.poller.__main__:main"
+umich-transit-web    = "umich_transit.web.__main__:main"
+umich-transit-demo   = "umich_transit.web.demo:main"
+umich-transit-demo-mcp = "umich_transit.mcp_server.demo:main"
 
 [build-system]
 requires = ["hatchling"]

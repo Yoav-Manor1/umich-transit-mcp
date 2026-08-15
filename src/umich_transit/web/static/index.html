@@ -1,0 +1,108 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="theme-color" content="#00274c">
+  <title>TrueBlue Transit</title>
+  <link rel="stylesheet" href="/static/style.css">
+</head>
+<body>
+  <header class="site-header">
+    <a class="brand" href="#" aria-label="TrueBlue Transit home">
+      <span class="brand-mark">M</span>
+      <span><strong>TrueBlue</strong><small>TRANSIT INTELLIGENCE</small></span>
+    </a>
+    <div class="header-status">
+      <span id="demo-label" class="demo-label" hidden>Sample times</span>
+      <span id="updated" class="updated">Waiting for live data</span>
+    </div>
+  </header>
+
+  <main class="shell">
+    <section class="hero">
+      <p class="eyebrow">U-M BUS ARRIVALS, CHECKED AGAINST REALITY</p>
+      <h1>Know when to leave.<br><em>See why.</em></h1>
+      <p class="hero-copy">Get a better estimate of when your bus will arrive, based on what usually happens on this route.</p>
+    </section>
+
+    <nav class="view-tabs" aria-label="Dashboard views">
+      <button class="view-tab active" data-view="live" aria-selected="true">Live board</button>
+      <button class="view-tab" data-view="accuracy" aria-selected="false">Accuracy proof</button>
+    </nav>
+
+    <section id="live-view" class="view active">
+      <div class="panel search-panel">
+        <label for="search">Find a campus stop</label>
+        <div class="search-wrap">
+          <span class="search-icon" aria-hidden="true">⌕</span>
+          <input id="search" class="search" autocomplete="off"
+                 placeholder="Try Pierpont, CCTC, or Bursley">
+          <div id="results" class="results"></div>
+        </div>
+        <div id="chips" class="chips" aria-label="Saved stops"></div>
+      </div>
+
+      <div id="note" class="notice" role="status" hidden></div>
+
+      <div id="empty" class="panel empty" hidden>
+        <span class="empty-icon">◎</span>
+        <h2>Choose your first stop</h2>
+        <p>Search above to build a personal arrival board. Favorites stay in this browser.</p>
+      </div>
+
+      <div id="board" class="panel board" hidden>
+        <div class="stop-head">
+          <div>
+            <p class="section-label">LIVE ARRIVALS</p>
+            <h2 id="stop-name">Selected stop</h2>
+          </div>
+          <label class="walk-control" for="walk-minutes">
+            <input id="walk-minutes" type="number" min="0" max="60" value="5"
+                   inputmode="numeric" aria-label="Walking time in minutes">
+            <span id="walk-label">min walk</span>
+          </label>
+        </div>
+        <div id="banner" class="leave-card" hidden>
+          <div class="leave-clock">◷</div>
+          <div>
+            <p class="banner-main"></p>
+            <p class="banner-sub"></p>
+          </div>
+        </div>
+        <div id="arrivals" class="arrivals"></div>
+        <p class="refresh-note">Refreshes every 60 seconds and when you return to this tab.</p>
+      </div>
+    </section>
+
+    <section id="accuracy-view" class="view">
+      <div class="panel accuracy-panel">
+        <div class="accuracy-head">
+          <div>
+            <p class="section-label">CHRONOLOGICAL HOLDOUT</p>
+            <h2>Does the correction actually help?</h2>
+          </div>
+          <span id="accuracy-status" class="status-pill">Loading</span>
+        </div>
+        <p id="accuracy-summary" class="accuracy-summary">Loading the latest evaluation report…</p>
+        <div id="metrics" class="metric-grid"></div>
+        <div id="route-metrics" class="route-metrics"></div>
+        <div class="method-card">
+          <span class="method-index">80</span>
+          <div><strong>Train on the past</strong><p>The oldest 80% builds transparent median-bias profiles.</p></div>
+          <span class="method-arrow">→</span>
+          <span class="method-index maize">20</span>
+          <div><strong>Grade on the future</strong><p>The newest 20% stays hidden until evaluation.</p></div>
+        </div>
+        <p id="evaluation-meta" class="evaluation-meta"></p>
+      </div>
+    </section>
+  </main>
+
+  <footer>
+    <span>Built to make U-M bus arrival times easier to trust</span>
+    <span>Every adjusted time includes an explanation</span>
+  </footer>
+  <script src="/static/app.js"></script>
+</body>
+</html>

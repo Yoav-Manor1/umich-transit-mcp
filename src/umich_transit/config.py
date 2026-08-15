@@ -17,8 +17,8 @@ class Settings(BaseSettings):
 
     database_url: str = "sqlite:///./data/transit.db"
 
-    prediction_poll_seconds: int = 30
-    arrival_poll_seconds: int = 15
+    prediction_poll_seconds: int = 120
+    arrival_poll_seconds: int = 30
 
     arrival_enter_meters: float = 30.0
     arrival_exit_meters: float = 50.0

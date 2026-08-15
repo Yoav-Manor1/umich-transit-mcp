@@ -133,3 +133,35 @@ async def test_empty_error_array_raises(client):
         return_value=httpx.Response(200, text='{"bustime-response": {"error": []}}'))
     with pytest.raises(BusTimeError):
         await client.get_routes()
+
+
+@respx.mock
+async def test_get_etas_for_stops_batches_and_parses(client):
+    body = (
+        '{"bustime-response": {"prd": ['
+        '{"tmstmp":"20260602 14:30","stpid":"1001",'
+        '"vid":"5001","rt":"BB","prdtm":"20260602 14:35"},'
+        '{"tmstmp":"20260602 14:31","stpid":"1002",'
+        '"vid":"5002","rt":"CN","prdtm":"20260602 14:40"}'
+        ']}}'
+    )
+    route = respx.get(url__startswith=BASE + "/getpredictions").mock(
+        return_value=httpx.Response(200, text=body))
+    etas = await client.get_etas_for_stops(["1001", "1002"])
+    assert {(e.stop_id, e.route_id) for e in etas} == {("1001", "BB"), ("1002", "CN")}
+    assert route.call_count == 1  # <=10 stops -> a single request
+    assert route.calls[0].request.url.params["stpid"] == "1001,1002"
+
+
+@respx.mock
+async def test_get_etas_for_stops_chunks_by_ten(client):
+    route = respx.get(url__startswith=BASE + "/getpredictions").mock(
+        return_value=httpx.Response(200, text='{"bustime-response": {"prd": []}}'))
+    await client.get_etas_for_stops([f"s{i}" for i in range(23)])
+    assert route.call_count == 3  # 10 + 10 + 3
+
+
+@respx.mock
+async def test_get_etas_for_stops_empty_skips_call(client):
+    etas = await client.get_etas_for_stops([])
+    assert etas == []

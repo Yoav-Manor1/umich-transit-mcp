@@ -17,6 +17,7 @@ from umich_transit.core.clients.base import StopRecord
 from umich_transit.core.clients.mbus import MbusClient
 from umich_transit.core.storage.db import create_engine_for_url, session_scope
 from umich_transit.core.storage.models import Arrival, Route, RouteStop, Stop
+from umich_transit.poller.analytics_job import refresh_showcase_analytics
 from umich_transit.poller.arrival_detector import ArrivalDetector
 from umich_transit.poller.prediction_logger import log_predictions
 from umich_transit.poller.stats_job import recompute_all_bins
@@ -61,9 +62,7 @@ async def _prediction_loop(engine: Engine, client: MbusClient) -> None:
     while True:
         try:
             stop_ids = _load_stop_ids(engine)
-            etas = []
-            for stop_id in stop_ids:
-                etas.extend(await client.get_etas(stop_id))
+            etas = await client.get_etas_for_stops(stop_ids)
             with session_scope(engine) as session:
                 inserted = log_predictions(session, etas)
             logger.info("prediction_loop.tick", stops=len(stop_ids), inserted=inserted)
@@ -120,7 +119,14 @@ async def _stats_loop(engine: Engine) -> None:
                 lookback_seconds=settings.reliability_lookback_seconds,
                 on_time_threshold_s=_ON_TIME_THRESHOLD_S,
             )
-            logger.info("stats_loop.tick", bins=written)
+            analytics = refresh_showcase_analytics(engine)
+            logger.info(
+                "stats_loop.tick",
+                bins=written,
+                matched_outcomes=analytics.matched_outcomes,
+                profiles=analytics.profile_count,
+                evaluation=analytics.evaluation_status,
+            )
         except Exception as exc:
             logger.error("stats_loop.error", error=str(exc))
         await asyncio.sleep(24 * 3600)
