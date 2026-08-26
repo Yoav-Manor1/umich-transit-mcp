@@ -106,7 +106,7 @@ def prediction_accuracy_tool(
         return _degraded_accuracy_result(result, ["adjusted.mean_absolute_error_s"])
     published_min = float(published_error) / 60
     adjusted_min = float(adjusted_error) / 60
-    evidence = metrics.get("sample_count", result["holdout_sample_count"])
+    evidence = metrics.get("sample_count", result.get("holdout_sample_count", 0))
     if not isinstance(evidence, (int, float)) or isinstance(evidence, bool):
         return _degraded_accuracy_result(result, ["sample_count"])
     evidence_count = int(evidence)

@@ -175,16 +175,17 @@ class MbusClient:
         for chunk in _chunked(route_ids, 10):
             body = await self._get("/getvehicles", rt=",".join(chunk))
             for raw in body.get("vehicle", []):
+                if not isinstance(raw, dict):
+                    skipped += 1
+                    continue
                 try:
-                    if not isinstance(raw, dict):
-                        raise TypeError("vehicle entry was not an object")
-                    hdg = raw.get("hdg")
+                    hdg: Any = raw.get("hdg")
                     out.append(VehicleRecord(
                         id=str(raw["vid"]),
                         route_id=str(raw.get("rt") or ""),
                         lat=float(raw["lat"]),
                         lon=float(raw["lon"]),
-                        heading=float(str(hdg)) if hdg not in (None, "") else None,
+                        heading=float(hdg) if hdg not in (None, "") else None,
                         captured_at=_parse_ts(str(raw["tmstmp"])),
                     ))
                 except (KeyError, ValueError, TypeError):
@@ -201,9 +202,10 @@ class MbusClient:
         out: list[EtaRecord] = []
         skipped = 0
         for raw in body.get("prd", []):
+            if not isinstance(raw, dict):
+                skipped += 1
+                continue
             try:
-                if not isinstance(raw, dict):
-                    raise TypeError("prediction entry was not an object")
                 out.append(_eta_from_prd(raw, stop_id))
             except (KeyError, ValueError, TypeError):
                 skipped += 1
@@ -222,9 +224,10 @@ class MbusClient:
         for chunk in _chunked(stop_ids, 10):
             body = await self._get("/getpredictions", stpid=",".join(chunk))
             for raw in body.get("prd", []):
+                if not isinstance(raw, dict):
+                    skipped += 1
+                    continue
                 try:
-                    if not isinstance(raw, dict):
-                        raise TypeError("prediction entry was not an object")
                     out.append(_eta_from_prd(raw))
                 except (KeyError, ValueError, TypeError):
                     skipped += 1
