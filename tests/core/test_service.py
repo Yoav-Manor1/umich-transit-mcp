@@ -13,6 +13,7 @@ from umich_transit.core.storage.models import (
     ReliabilityProfileRow,
     ReliabilityStat,
     Route,
+    RouteStop,
     Stop,
 )
 
@@ -153,6 +154,29 @@ def test_route_reliability_no_data(engine):
     assert r["sample_count"] == 0
 
 
+def test_route_reliability_filters_by_day_and_hour(engine):
+    now = datetime(2026, 5, 1, 18, 0, tzinfo=UTC)
+    with session_scope(engine) as s:
+        s.add(ReliabilityStat(
+            route_id="r1", stop_id="s1", dow=1, hour=8,
+            on_time_pct=0.8, mean_delay_s=10, p50_delay_s=10,
+            p90_delay_s=10, sample_count=5, updated_at=now,
+        ))
+        s.add(ReliabilityStat(
+            route_id="r1", stop_id="s2", dow=2, hour=9,
+            on_time_pct=0.0, mean_delay_s=1_000, p50_delay_s=1_000,
+            p90_delay_s=1_000, sample_count=100, updated_at=now,
+        ))
+
+    result = TransitService(engine=engine, mbus=AsyncMock()).route_reliability(
+        route_id="r1", day_of_week=1, hour=8,
+    )
+
+    assert result["sample_count"] == 5
+    assert result["mean_delay_s"] == pytest.approx(10)
+    assert result["on_time_pct"] == pytest.approx(0.8)
+
+
 def test_prediction_accuracy_returns_latest_holdout_report(engine):
     now = datetime(2026, 5, 1, 18, 0, tzinfo=UTC)
     with session_scope(engine) as s:
@@ -218,3 +242,73 @@ def test_prediction_accuracy_explains_missing_evaluation(engine):
         "status": "insufficient_data",
         "summary": "No evaluation report yet. Run the analytics refresh first.",
     }
+
+
+@pytest.mark.parametrize("metrics_json", [
+    {"routes": {"other": {"mean_absolute_error_s": 1}}},
+    {"routes": ["not", "a", "dict"]},
+])
+def test_prediction_accuracy_explains_missing_route_metrics(engine, metrics_json):
+    now = datetime(2026, 5, 1, 18, 0, tzinfo=UTC)
+    with session_scope(engine) as s:
+        s.add(EvaluationReportRow(
+            generated_at=now, status="ready", total_sample_count=100,
+            training_sample_count=80, holdout_sample_count=20,
+            match_version="fixed-horizon-v1", model_version="median-hierarchy-v1",
+            metrics_json=metrics_json,
+        ))
+
+    report = TransitService(engine=engine, mbus=AsyncMock()).prediction_accuracy(
+        route_id="r1",
+    )
+
+    assert report == {
+        "status": "insufficient_data",
+        "route_id": "r1",
+        "summary": "This route does not have 20 held-out arrivals yet.",
+    }
+
+
+@pytest.mark.asyncio
+async def test_plan_trip_returns_same_route_segment(engine):
+    now = datetime(2026, 5, 1, 18, 0, tzinfo=UTC)
+    with session_scope(engine) as s:
+        s.add(RouteStop(route_id="r1", stop_id="s1", sequence=1))
+        s.add(RouteStop(route_id="r1", stop_id="s2", sequence=2))
+    client = AsyncMock()
+    client.get_etas.return_value = [
+        EtaRecord(
+            route_id="r1", stop_id="s1", vehicle_id="v1",
+            predicted_arrival_at=now + timedelta(minutes=5), captured_at=now,
+        ),
+    ]
+
+    result = await TransitService(engine=engine, mbus=client).plan_trip(
+        from_stop_id="s1", to_stop_id="s2",
+    )
+
+    assert result["summary"] == "Take route r1 (vehicle v1) from s1 to s2"
+    assert result["plan"]["segments"] == [{
+        "mode": "bus",
+        "route_id": "r1",
+        "vehicle_id": "v1",
+        "from_stop_id": "s1",
+        "to_stop_id": "s2",
+        "board_at": (now + timedelta(minutes=5)).isoformat(),
+        "adjusted_arrival_at": (now + timedelta(minutes=5)).isoformat(),
+    }]
+
+
+@pytest.mark.asyncio
+async def test_plan_trip_reports_no_same_route_option(engine):
+    with session_scope(engine) as s:
+        s.add(RouteStop(route_id="r1", stop_id="s1", sequence=1))
+        s.add(RouteStop(route_id="r1", stop_id="s2", sequence=2))
+    client = AsyncMock()
+    client.get_etas.return_value = []
+
+    result = await TransitService(engine=engine, mbus=client).plan_trip(
+        from_stop_id="s1", to_stop_id="s2",
+    )
+
+    assert result == {"summary": "No same-route trip available.", "plan": None}

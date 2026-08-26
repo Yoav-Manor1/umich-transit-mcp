@@ -5,6 +5,7 @@ from unittest.mock import AsyncMock
 
 from fastapi.testclient import TestClient
 
+from umich_transit.config import settings
 from umich_transit.core.clients.base import EtaRecord
 from umich_transit.core.clients.mbus import BusTimeError
 from umich_transit.core.service import TransitService
@@ -57,6 +58,19 @@ def _service(etas=None, raise_upstream=False, with_evaluation=False):
 def test_health_ok():
     client = TestClient(build_app(_service()))
     assert client.get("/api/health").json() == {"status": "ok"}
+
+
+def test_app_lifespan_builds_and_closes_injected_dependencies(monkeypatch):
+    monkeypatch.setattr(settings, "database_url", "sqlite:///:memory:")
+    app = build_app()
+
+    with TestClient(app) as client:
+        assert client.get("/api/health").json() == {"status": "ok"}
+        assert app.state.svc is not None
+        assert app.state.http is not None
+        assert app.state.http.is_closed is False
+
+    assert app.state.http.is_closed is True
 
 
 def test_search_returns_matching_stops():
