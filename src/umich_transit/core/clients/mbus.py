@@ -8,7 +8,6 @@ no timezone, so we localize them; the storage layer converts to UTC on write.
 from collections.abc import Iterator
 from datetime import datetime
 from typing import Any
-from zoneinfo import ZoneInfo
 
 import httpx
 
@@ -18,9 +17,9 @@ from umich_transit.core.clients.base import (
     StopRecord,
     VehicleRecord,
 )
+from umich_transit.core.time import AGENCY_TIMEZONE
 
 API_PATH = "/bustime/api/v3"
-AGENCY_TZ = ZoneInfo("America/Detroit")
 
 # BusTime returns HTTP 200 with an "error" array even for "no results" cases.
 # These message prefixes mean "no data", not a real failure — treat as empty.
@@ -47,7 +46,7 @@ def _parse_ts(value: str) -> datetime:
     """
     for fmt in ("%Y%m%d %H:%M:%S", "%Y%m%d %H:%M"):
         try:
-            return datetime.strptime(value, fmt).replace(tzinfo=AGENCY_TZ)
+            return datetime.strptime(value, fmt).replace(tzinfo=AGENCY_TIMEZONE)
         except ValueError:
             continue
     raise ValueError(f"Unrecognized BusTime timestamp: {value!r}")

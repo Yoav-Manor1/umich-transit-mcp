@@ -16,10 +16,9 @@ from fastapi import FastAPI, Request
 from fastapi.responses import FileResponse
 from fastapi.staticfiles import StaticFiles
 
-from umich_transit.config import settings
-from umich_transit.core.clients.mbus import BusTimeError, MbusClient
+from umich_transit.core.clients.mbus import BusTimeError
+from umich_transit.core.runtime import build_live_service
 from umich_transit.core.service import TransitService
-from umich_transit.core.storage.db import create_engine_for_url
 from umich_transit.web.leave import compute_leave
 
 STATIC_DIR = Path(__file__).resolve().parent / "static"
@@ -29,15 +28,9 @@ def build_app(svc: TransitService | None = None, *, demo_mode: bool = False) -> 
     @asynccontextmanager
     async def lifespan(app: FastAPI) -> AsyncIterator[None]:
         if getattr(app.state, "svc", None) is None:
-            engine = create_engine_for_url(settings.database_url)
-            http = httpx.AsyncClient(timeout=15.0)
-            mbus = MbusClient(
-                base_url=settings.mbus_base_url,
-                api_key=settings.mbus_api_key.get_secret_value(),
-                http=http,
-            )
-            app.state.svc = TransitService(engine=engine, mbus=mbus)
-            app.state.http = http
+            resources = build_live_service()
+            app.state.svc = resources.service
+            app.state.http = resources.http
         try:
             yield
         finally:
