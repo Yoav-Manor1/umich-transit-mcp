@@ -1,6 +1,10 @@
 """Tests for the poller's DB-loader helpers (the testable, non-loop parts)."""
+import asyncio
+from unittest.mock import AsyncMock, MagicMock
+
 import pytest
 
+import umich_transit.poller.runner as runner
 from umich_transit.core.storage.db import create_engine_for_url, session_scope
 from umich_transit.core.storage.models import Base, Route, RouteStop, Stop
 from umich_transit.poller.runner import (
@@ -36,3 +40,27 @@ def test_load_detector_context_orders_stops_by_sequence(engine):
     assert {s.id for s in stops} == {"s1", "s2"}
     # route_stops ordered by sequence -> s1 (seq 1) before s2 (seq 2)
     assert route_stops == {"r1": ["s1", "s2"]}
+
+
+async def test_prediction_loop_escalates_after_three_failures(monkeypatch):
+    client = MagicMock()
+    client.get_etas_for_stops = AsyncMock(side_effect=RuntimeError("broken"))
+    monkeypatch.setattr(runner, "_load_stop_ids", lambda _engine: [])
+    warning = MagicMock()
+    error = MagicMock()
+    monkeypatch.setattr(runner.logger, "warning", warning)
+    monkeypatch.setattr(runner.logger, "error", error)
+    sleep_calls = 0
+
+    async def stop_after_three(_seconds):
+        nonlocal sleep_calls
+        sleep_calls += 1
+        if sleep_calls >= 3:
+            raise asyncio.CancelledError
+
+    monkeypatch.setattr(runner.asyncio, "sleep", stop_after_three)
+    with pytest.raises(asyncio.CancelledError):
+        await runner._prediction_loop(MagicMock(), client)
+
+    assert error.call_args.args[0] == "prediction_loop.error"
+    assert error.call_args.kwargs["consecutive_failures"] == 3

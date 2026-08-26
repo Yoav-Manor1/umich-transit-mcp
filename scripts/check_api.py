@@ -26,13 +26,13 @@ async def main() -> None:
     key = settings.mbus_api_key.get_secret_value()
     if not key:
         print("MBUS_API_KEY is empty - set it in .env first.")
-        return
+        raise SystemExit(1)
 
     async with httpx.AsyncClient(timeout=10.0) as http:
         gettime = await _raw(http, key, "/gettime")
         if "error" in gettime.get("bustime-response", {}):
             print("Key rejected:", gettime)
-            return
+            raise SystemExit(1)
         print("Key OK. Server time:", gettime["bustime-response"].get("tm"))
 
         print("\n--- raw getroutes (first 400 chars) ---")

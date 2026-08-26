@@ -202,6 +202,8 @@ class TransitService:
         if not rows:
             return {"route_id": route_id, "sample_count": 0, "summary": "no data yet"}
         total = sum(r.sample_count for r in rows)
+        if total == 0:
+            return {"route_id": route_id, "sample_count": 0, "summary": "no data yet"}
         weighted_mean = sum(r.mean_delay_s * r.sample_count for r in rows) / total
         weighted_on_time = sum(r.on_time_pct * r.sample_count for r in rows) / total
         return {

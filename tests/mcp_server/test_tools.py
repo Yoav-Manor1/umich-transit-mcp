@@ -102,3 +102,20 @@ def test_prediction_accuracy_tool_summarizes_held_out_result():
     assert "3.0 min" in result["summary"]
     assert "1.5 min" in result["summary"]
     svc.prediction_accuracy.assert_called_once_with(route_id="r1")
+
+
+def test_prediction_accuracy_tool_degrades_on_malformed_metrics():
+    svc = MagicMock()
+    svc.prediction_accuracy.return_value = {
+        "status": "ready", "holdout_sample_count": 20,
+        "metrics": {
+            "classification": "improved",
+            "published": {},
+            "adjusted": {"mean_absolute_error_s": 90.0},
+        },
+    }
+
+    result = tools.prediction_accuracy_tool(svc)
+
+    assert result["status"] == "insufficient_data"
+    assert result["summary"] == "The evaluation report could not be interpreted."

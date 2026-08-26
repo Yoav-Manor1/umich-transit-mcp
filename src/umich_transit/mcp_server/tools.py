@@ -4,7 +4,11 @@ service method, format the result. No SQL, no HTTP, no math here.
 from datetime import UTC, datetime
 from typing import Any
 
+import structlog
+
 from umich_transit.core.service import TransitService
+
+logger = structlog.get_logger(__name__)
 
 
 def list_routes_tool(svc: TransitService, agency: str | None = None) -> dict[str, Any]:
@@ -77,21 +81,50 @@ def prediction_accuracy_tool(
 ) -> dict[str, Any]:
     """Compare published and adjusted error on chronologically held-out data."""
     result = svc.prediction_accuracy(route_id=route_id)
-    if result["status"] != "ready" or result.get("metrics") is None:
+    if result["status"] != "ready":
         result.setdefault("summary", "Not enough matched outcomes for a holdout evaluation.")
         return result
-    metrics = result["metrics"]
-    assert isinstance(metrics, dict)
-    published = metrics["published"]
-    adjusted = metrics["adjusted"]
-    assert isinstance(published, dict) and isinstance(adjusted, dict)
-    published_min = float(published["mean_absolute_error_s"]) / 60
-    adjusted_min = float(adjusted["mean_absolute_error_s"]) / 60
-    evidence_count = int(metrics.get("sample_count", result["holdout_sample_count"]))
+    metrics = result.get("metrics")
+    if metrics is None:
+        return _degraded_accuracy_result(result, ["metrics"])
+    if not isinstance(metrics, dict):
+        return _degraded_accuracy_result(result, ["metrics"])
+    published = metrics.get("published")
+    adjusted = metrics.get("adjusted")
+    if not isinstance(published, dict) or not isinstance(adjusted, dict):
+        offending_keys: list[str] = []
+        if not isinstance(published, dict):
+            offending_keys.append("published")
+        if not isinstance(adjusted, dict):
+            offending_keys.append("adjusted")
+        return _degraded_accuracy_result(result, offending_keys)
+    published_error = published.get("mean_absolute_error_s")
+    adjusted_error = adjusted.get("mean_absolute_error_s")
+    if not isinstance(published_error, (int, float)) or isinstance(published_error, bool):
+        return _degraded_accuracy_result(result, ["published.mean_absolute_error_s"])
+    if not isinstance(adjusted_error, (int, float)) or isinstance(adjusted_error, bool):
+        return _degraded_accuracy_result(result, ["adjusted.mean_absolute_error_s"])
+    published_min = float(published_error) / 60
+    adjusted_min = float(adjusted_error) / 60
+    evidence = metrics.get("sample_count", result.get("holdout_sample_count", 0))
+    if not isinstance(evidence, (int, float)) or isinstance(evidence, bool):
+        return _degraded_accuracy_result(result, ["sample_count"])
+    evidence_count = int(evidence)
+    classification = str(metrics.get("classification", "unknown"))
     result["summary"] = (
         f"On {evidence_count} held-out arrivals, published predictions "
         f"averaged {published_min:.1f} min error versus {adjusted_min:.1f} min after "
-        f"adjustment ({metrics['classification']})."
+        f"adjustment ({classification})."
+    )
+    return result
+
+
+def _degraded_accuracy_result(result: dict[str, Any], offending_keys: list[str]) -> dict[str, Any]:
+    result["status"] = "insufficient_data"
+    result["summary"] = "The evaluation report could not be interpreted."
+    logger.warning(
+        "prediction_accuracy.malformed_report",
+        offending_keys=offending_keys,
     )
     return result
 

@@ -26,6 +26,7 @@ logger = structlog.get_logger(__name__)
 
 _MAX_BACKOFF_S = 60.0
 _ON_TIME_THRESHOLD_S = 120.0
+_ERROR_AFTER_CONSECUTIVE_FAILURES = 3
 
 
 def _load_detector_context(
@@ -59,6 +60,7 @@ def _load_stop_ids(engine: Engine) -> list[str]:
 
 async def _prediction_loop(engine: Engine, client: MbusClient) -> None:
     backoff = 1.0
+    consecutive_failures = 0
     while True:
         try:
             stop_ids = _load_stop_ids(engine)
@@ -67,8 +69,22 @@ async def _prediction_loop(engine: Engine, client: MbusClient) -> None:
                 inserted = log_predictions(session, etas)
             logger.info("prediction_loop.tick", stops=len(stop_ids), inserted=inserted)
             backoff = 1.0
+            consecutive_failures = 0
         except Exception as exc:
-            logger.warning("prediction_loop.error", error=str(exc), backoff=backoff)
+            consecutive_failures += 1
+            log = (
+                logger.error
+                if consecutive_failures >= _ERROR_AFTER_CONSECUTIVE_FAILURES
+                else logger.warning
+            )
+            log(
+                "prediction_loop.error",
+                error=str(exc),
+                error_type=type(exc).__name__,
+                backoff=backoff,
+                consecutive_failures=consecutive_failures,
+                exc_info=True,
+            )
             await asyncio.sleep(min(backoff, _MAX_BACKOFF_S))
             backoff = min(backoff * 2, _MAX_BACKOFF_S)
             continue
@@ -85,6 +101,7 @@ async def _arrival_loop(engine: Engine, client: MbusClient) -> None:
         exit_meters=settings.arrival_exit_meters,
     )
     backoff = 1.0
+    consecutive_failures = 0
     while True:
         try:
             vehicles = await client.get_vehicle_positions(route_ids)
@@ -103,8 +120,22 @@ async def _arrival_loop(engine: Engine, client: MbusClient) -> None:
                         ))
             logger.info("arrival_loop.tick", vehicles=len(vehicles), arrivals=len(events))
             backoff = 1.0
+            consecutive_failures = 0
         except Exception as exc:
-            logger.warning("arrival_loop.error", error=str(exc), backoff=backoff)
+            consecutive_failures += 1
+            log = (
+                logger.error
+                if consecutive_failures >= _ERROR_AFTER_CONSECUTIVE_FAILURES
+                else logger.warning
+            )
+            log(
+                "arrival_loop.error",
+                error=str(exc),
+                error_type=type(exc).__name__,
+                backoff=backoff,
+                consecutive_failures=consecutive_failures,
+                exc_info=True,
+            )
             await asyncio.sleep(min(backoff, _MAX_BACKOFF_S))
             backoff = min(backoff * 2, _MAX_BACKOFF_S)
             continue
@@ -112,6 +143,7 @@ async def _arrival_loop(engine: Engine, client: MbusClient) -> None:
 
 
 async def _stats_loop(engine: Engine) -> None:
+    consecutive_failures = 0
     while True:
         try:
             written = recompute_all_bins(
@@ -127,8 +159,21 @@ async def _stats_loop(engine: Engine) -> None:
                 profiles=analytics.profile_count,
                 evaluation=analytics.evaluation_status,
             )
+            consecutive_failures = 0
         except Exception as exc:
-            logger.error("stats_loop.error", error=str(exc))
+            consecutive_failures += 1
+            log = (
+                logger.error
+                if consecutive_failures >= _ERROR_AFTER_CONSECUTIVE_FAILURES
+                else logger.warning
+            )
+            log(
+                "stats_loop.error",
+                error=str(exc),
+                error_type=type(exc).__name__,
+                consecutive_failures=consecutive_failures,
+                exc_info=True,
+            )
         await asyncio.sleep(24 * 3600)
 
 

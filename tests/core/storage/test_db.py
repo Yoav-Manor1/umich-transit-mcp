@@ -1,5 +1,7 @@
 """Tests for the database engine and session factory."""
+import pytest
 from sqlalchemy import text
+from sqlalchemy.orm import Session
 
 from umich_transit.core.storage.db import create_engine_for_url, session_scope
 
@@ -34,6 +36,18 @@ def test_session_scope_rolls_back_on_error():
     with session_scope(engine) as session:
         count = session.execute(text("SELECT COUNT(*) FROM foo")).scalar()
         assert count == 0
+
+
+def test_session_scope_rollback_failure_does_not_mask_original(monkeypatch):
+    engine = create_engine_for_url("sqlite:///:memory:")
+
+    def fail_rollback(self):
+        raise OSError("rollback failed")
+
+    monkeypatch.setattr(Session, "rollback", fail_rollback)
+    with pytest.raises(RuntimeError, match="original"):
+        with session_scope(engine):
+            raise RuntimeError("original")
 
 
 def test_file_backed_sqlite_enables_wal_and_foreign_keys(tmp_path):
