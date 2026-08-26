@@ -137,3 +137,17 @@ def test_demo_app_starts_with_ready_accuracy_and_searchable_stops(tmp_path):
     assert client.get("/api/accuracy").json()["status"] == "ready"
     stops = client.get("/api/stops/search", params={"q": "central"}).json()["stops"]
     assert stops[0]["id"] == "CCTC"
+
+
+def test_out_of_range_query_parameters_are_rejected():
+    client = TestClient(build_app(_service()))
+
+    assert client.get("/api/stops/search", params={"limit": 100_000}).status_code == 422
+    assert client.get("/api/stops/search", params={"q": "x" * 500}).status_code == 422
+    assert client.get(
+        "/api/arrivals", params={"stop_id": "C251", "limit": -1}
+    ).status_code == 422
+    assert client.get(
+        "/api/arrivals", params={"stop_id": "C251", "walk_min": 100_000}
+    ).status_code == 422
+    assert client.get("/api/arrivals", params={"stop_id": ""}).status_code == 422
