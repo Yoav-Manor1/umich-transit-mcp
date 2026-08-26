@@ -2,13 +2,10 @@
 from contextlib import AsyncExitStack
 from typing import Any
 
-import httpx
 from mcp.server.fastmcp import FastMCP
 
-from umich_transit.config import settings
-from umich_transit.core.clients.mbus import MbusClient
+from umich_transit.core.runtime import build_live_service
 from umich_transit.core.service import TransitService
-from umich_transit.core.storage.db import create_engine_for_url
 from umich_transit.mcp_server import tools
 
 
@@ -19,19 +16,9 @@ def build_server(svc: TransitService | None = None) -> tuple[FastMCP, AsyncExitS
     stack = AsyncExitStack()
 
     if svc is None:
-        engine = create_engine_for_url(settings.database_url)
-        http = httpx.AsyncClient(timeout=15.0)
-        mbus = MbusClient(
-            base_url=settings.mbus_base_url,
-            api_key=settings.mbus_api_key.get_secret_value(),
-            http=http,
-        )
-        svc = TransitService(engine=engine, mbus=mbus)
-
-        async def _close_http() -> None:
-            await http.aclose()
-
-        stack.push_async_callback(_close_http)
+        resources = build_live_service()
+        svc = resources.service
+        stack.push_async_callback(resources.http.aclose)
 
     @mcp.tool()
     def list_routes(agency: str | None = None) -> dict[str, Any]:

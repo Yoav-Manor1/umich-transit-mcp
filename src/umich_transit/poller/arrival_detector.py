@@ -11,9 +11,9 @@ later re-observation can fire again.
 from dataclasses import dataclass, field
 from datetime import datetime, timedelta
 from enum import StrEnum
-from math import asin, cos, radians, sin, sqrt
 
 from umich_transit.core.clients.base import StopRecord, VehicleRecord
+from umich_transit.core.geo import haversine_m
 
 
 class _State(StrEnum):
@@ -35,16 +35,6 @@ class _VehicleState:
     last_seen: datetime
     # stop_id -> AT_STOP while the vehicle remains within the exit threshold
     at_stops: dict[str, _State] = field(default_factory=dict)
-
-
-def _haversine_m(a_lat: float, a_lon: float, b_lat: float, b_lon: float) -> float:
-    r_earth_m = 6_371_000.0
-    p1, p2 = radians(a_lat), radians(b_lat)
-    dphi = radians(b_lat - a_lat)
-    dlam = radians(b_lon - a_lon)
-    a = sin(dphi / 2) ** 2 + cos(p1) * cos(p2) * sin(dlam / 2) ** 2
-    return 2 * r_earth_m * asin(sqrt(a))
-
 
 class ArrivalDetector:
     def __init__(
@@ -80,7 +70,7 @@ class ArrivalDetector:
             stop = self._stops_by_id.get(stop_id)
             if stop is None:
                 continue
-            dist = _haversine_m(vehicle.lat, vehicle.lon, stop.lat, stop.lon)
+            dist = haversine_m(vehicle.lat, vehicle.lon, stop.lat, stop.lon)
             current = vstate.at_stops.get(stop_id, _State.APPROACHING)
 
             if current is _State.APPROACHING and dist < self._enter:

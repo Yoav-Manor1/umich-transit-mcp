@@ -2,7 +2,6 @@
 from collections.abc import Callable
 from datetime import UTC, datetime, timedelta
 from pathlib import Path
-from zoneinfo import ZoneInfo
 
 from sqlalchemy import Engine
 
@@ -18,9 +17,8 @@ from umich_transit.core.storage.models import (
     RouteStop,
     Stop,
 )
+from umich_transit.core.time import AGENCY_TIMEZONE
 from umich_transit.poller.analytics_job import refresh_showcase_analytics
-
-AGENCY_TZ = ZoneInfo("America/Detroit")
 
 DEMO_ROUTES = (
     ("CN", "Commuter North", "#2F65A7", "CCTC", "Central Campus Transit Center", 180),
@@ -81,7 +79,7 @@ def build_demo_service(
 
 def _seed_demo_history(engine: Engine, now: datetime) -> None:
     anchor = (
-        now.astimezone(AGENCY_TZ).replace(minute=0, second=0, microsecond=0)
+        now.astimezone(AGENCY_TIMEZONE).replace(minute=0, second=0, microsecond=0)
         - timedelta(weeks=1)
     )
     with session_scope(engine) as session:

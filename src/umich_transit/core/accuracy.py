@@ -1,11 +1,11 @@
 """Transparent reliability profiles and chronological accuracy evaluation."""
 from collections import defaultdict
 from dataclasses import dataclass
-from datetime import UTC, datetime
+from datetime import datetime
 from statistics import mean, median
-from zoneinfo import ZoneInfo
 
-AGENCY_TZ = ZoneInfo("America/Detroit")
+from umich_transit.core.time import to_agency_time
+
 HIGH_CONFIDENCE_SAMPLES = 30
 MEDIUM_CONFIDENCE_SAMPLES = 20
 MAX_CORRECTION_SECONDS = 600.0
@@ -70,7 +70,7 @@ def build_profiles(samples: list[OutcomeSample]) -> list[ReliabilityProfile]:
         defaultdict(list)
     )
     for sample in samples:
-        local = _local(sample.actual_arrival_at)
+        local = to_agency_time(sample.actual_arrival_at)
         keys = (
             ("route_stop_dow_hour", sample.route_id, sample.stop_id,
              local.weekday(), local.hour),
@@ -102,7 +102,7 @@ def select_adjustment(
     stop_id: str,
     at: datetime,
 ) -> Adjustment:
-    local = _local(at)
+    local = to_agency_time(at)
     candidates = (
         ("route_stop_dow_hour", stop_id, local.weekday(), HIGH_CONFIDENCE_SAMPLES, "high"),
         ("route_stop_hour", stop_id, None, MEDIUM_CONFIDENCE_SAMPLES, "medium"),
@@ -177,13 +177,6 @@ def evaluate_accuracy(samples: list[OutcomeSample]) -> AccuracyReport:
         overall=overall,
         routes=routes,
     )
-
-
-def _local(at: datetime) -> datetime:
-    if at.tzinfo is None:
-        at = at.replace(tzinfo=UTC)
-    return at.astimezone(AGENCY_TZ)
-
 
 def _metrics(errors: list[float]) -> AccuracyMetrics:
     absolute = [abs(error) for error in errors]

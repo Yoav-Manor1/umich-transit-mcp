@@ -4,11 +4,10 @@ Pure functions over numeric delays; no I/O. The nightly batch job calls these
 against query results.
 """
 from dataclasses import dataclass
-from datetime import UTC, datetime
+from datetime import datetime
 from statistics import mean
-from zoneinfo import ZoneInfo
 
-AGENCY_TZ = ZoneInfo("America/Detroit")
+from umich_transit.core.time import to_agency_time
 
 
 @dataclass(frozen=True)
@@ -25,9 +24,7 @@ class BinKey:
         Naive datetimes are assumed UTC. Localizing here (rather than at call
         sites) guarantees the stats job and the live lookup use identical bins.
         """
-        if at.tzinfo is None:
-            at = at.replace(tzinfo=UTC)
-        local = at.astimezone(AGENCY_TZ)
+        local = to_agency_time(at)
         return cls(route_id=route_id, stop_id=stop_id, dow=local.weekday(), hour=local.hour)
 
 
