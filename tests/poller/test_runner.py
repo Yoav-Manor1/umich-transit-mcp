@@ -158,10 +158,14 @@ async def test_stats_loop_runs_jobs_and_uses_daily_interval(engine, monkeypatch)
         matched_outcomes=4, profile_count=2, evaluation_status="ready",
     )
 
+    ran: list[str] = []
+
     def recompute(*args, **kwargs):
+        ran.append("recompute")
         return 7
 
     def refresh(*args):
+        ran.append("refresh")
         return analytics
 
     monkeypatch.setattr(runner, "recompute_all_bins", recompute)
@@ -175,6 +179,7 @@ async def test_stats_loop_runs_jobs_and_uses_daily_interval(engine, monkeypatch)
     with pytest.raises(StopLoop):
         await runner._stats_loop(engine)
 
+    assert ran == ["recompute", "refresh"]
     assert delays == [24 * 3600]
 
 
