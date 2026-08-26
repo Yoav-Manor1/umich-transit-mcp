@@ -5,7 +5,7 @@ let searchTimer = null;
 
 function loadFavs() {
   try { return JSON.parse(localStorage.getItem(LS_FAVS)) || []; }
-  catch { return []; }
+  catch (error) { console.error("loadFavs", error); return []; }
 }
 function saveFavs(favs) { localStorage.setItem(LS_FAVS, JSON.stringify(favs)); }
 function getSelected() { return localStorage.getItem(LS_SEL); }
@@ -133,7 +133,8 @@ function onSearch(event) {
         item.onclick = () => addFav(stop);
         box.appendChild(item);
       });
-    } catch {
+    } catch (error) {
+      console.error("onSearch", error);
       setNote("Stop search is temporarily unavailable.");
     }
   }, 250);
@@ -227,11 +228,13 @@ async function refresh() {
     data = await api("/api/arrivals", {
       stop_id: selected, walk_min: currentWalk(), limit: 5,
     });
-  } catch {
+  } catch (error) {
+    console.error("refresh", error);
     setNote("Couldn’t refresh the live feed. Keeping the last good board while we retry.");
     return;
   }
   if (data.error) {
+    if (data.error === "upstream") console.warn("refresh upstream error", data);
     setNote("Couldn’t reach Magic Bus. Keeping the last good board while we retry.");
     return;
   }
@@ -274,7 +277,8 @@ async function loadAccuracy() {
     renderRouteMetrics(comparison.routes);
     document.getElementById("evaluation-meta").textContent =
       `${report.training_sample_count} training · ${report.holdout_sample_count} held out · ${report.match_version} · ${report.model_version}`;
-  } catch {
+  } catch (error) {
+    console.error("loadAccuracy", error);
     status.textContent = "Unavailable";
     summary.textContent = "The evaluation report could not be loaded.";
   }
@@ -295,7 +299,8 @@ async function loadMeta() {
   try {
     const meta = await api("/api/meta");
     document.getElementById("demo-label").hidden = !meta.demo_mode;
-  } catch {
+  } catch (error) {
+    console.error("loadMeta", error);
     document.getElementById("demo-label").hidden = true;
   }
 }

@@ -105,6 +105,60 @@ async def test_get_etas_no_arrivals_returns_empty(client):
 
 
 @respx.mock
+async def test_non_json_response_raises_bus_time_error(client):
+    respx.get(url__startswith=BASE + "/getroutes").mock(
+        return_value=httpx.Response(200, text="<html>maintenance</html>"))
+    with pytest.raises(BusTimeError, match="getroutes"):
+        await client.get_routes()
+
+
+@respx.mock
+async def test_response_missing_wrapper_raises_bus_time_error(client):
+    respx.get(url__startswith=BASE + "/getroutes").mock(
+        return_value=httpx.Response(200, json={"routes": []}))
+    with pytest.raises(BusTimeError, match="getroutes"):
+        await client.get_routes()
+
+
+@respx.mock
+async def test_get_etas_skips_malformed_entry(client):
+    body = (
+        '{"bustime-response": {"prd": ['
+        '{"tmstmp":"20260602 14:30","stpid":"1001",'
+        '"vid":"5001","rt":"BB","prdtm":"20260602 14:35"},'
+        '{"tmstmp":"20260602 14:31","stpid":"1002",'
+        '"vid":"5002","rt":"CN"}'
+        ']}}'
+    )
+    respx.get(url__startswith=BASE + "/getpredictions").mock(
+        return_value=httpx.Response(200, text=body))
+    etas = await client.get_etas(stop_id="1001")
+    assert [(eta.stop_id, eta.route_id) for eta in etas] == [("1001", "BB")]
+
+
+@respx.mock
+async def test_single_dict_error_is_handled(client):
+    body = (
+        '{"bustime-response": {"error": {"msg": "No arrival times found"}, "prd": ['
+        '{"tmstmp":"20260602 14:30","stpid":"1001",'
+        '"vid":"5001","rt":"BB","prdtm":"20260602 14:35"}]}}'
+    )
+    respx.get(url__startswith=BASE + "/getpredictions").mock(
+        return_value=httpx.Response(200, text=body))
+    etas = await client.get_etas(stop_id="1001")
+    assert len(etas) == 1
+
+
+@respx.mock
+async def test_single_dict_non_benign_error_raises(client):
+    body = '{"bustime-response": {"error": {"msg": "Invalid API key"}}}'
+    respx.get(url__startswith=BASE + "/getpredictions").mock(
+        return_value=httpx.Response(200, text=body))
+    with pytest.raises(BusTimeError):
+        await client.get_etas(stop_id="1001")
+
+
+@respx.mock
 async def test_invalid_or_missing_key_raises(client):
     respx.get(url__startswith=BASE + "/getroutes").mock(
         return_value=httpx.Response(200, text=_load("error_no_key.json")))

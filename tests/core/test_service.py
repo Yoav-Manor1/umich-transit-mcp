@@ -153,6 +153,19 @@ def test_route_reliability_no_data(engine):
     assert r["sample_count"] == 0
 
 
+def test_route_reliability_zero_sample_rows(engine):
+    now = datetime(2026, 5, 1, 18, 0, tzinfo=UTC)
+    with session_scope(engine) as s:
+        s.add(ReliabilityStat(route_id="r1", stop_id="s1", dow=1, hour=8,
+                              on_time_pct=0.0, mean_delay_s=0.0,
+                              p50_delay_s=0.0, p90_delay_s=0.0, sample_count=0,
+                              updated_at=now))
+    svc = TransitService(engine=engine, mbus=AsyncMock())
+    assert svc.route_reliability(route_id="r1") == {
+        "route_id": "r1", "sample_count": 0, "summary": "no data yet",
+    }
+
+
 def test_prediction_accuracy_returns_latest_holdout_report(engine):
     now = datetime(2026, 5, 1, 18, 0, tzinfo=UTC)
     with session_scope(engine) as s:

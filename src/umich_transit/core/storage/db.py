@@ -2,9 +2,12 @@
 from collections.abc import Iterator
 from contextlib import contextmanager
 
+import structlog
 from sqlalchemy import Engine, create_engine, event
 from sqlalchemy.orm import Session, sessionmaker
 from sqlalchemy.pool import StaticPool
+
+logger = structlog.get_logger(__name__)
 
 
 def create_engine_for_url(url: str) -> Engine:
@@ -50,11 +53,31 @@ def session_scope(engine: Engine) -> Iterator[Session]:
     """
     factory = sessionmaker(bind=engine, expire_on_commit=False)
     session = factory()
+    active_error: BaseException | None = None
     try:
         yield session
         session.commit()
-    except BaseException:
-        session.rollback()
+    except BaseException as exc:
+        active_error = exc
+        try:
+            session.rollback()
+        except Exception as rollback_exc:
+            logger.warning(
+                "session_scope.rollback_failed",
+                error=str(rollback_exc),
+                error_type=type(rollback_exc).__name__,
+                exc_info=True,
+            )
         raise
     finally:
-        session.close()
+        try:
+            session.close()
+        except Exception as close_exc:
+            logger.warning(
+                "session_scope.close_failed",
+                error=str(close_exc),
+                error_type=type(close_exc).__name__,
+                exc_info=True,
+            )
+            if active_error is None:
+                raise

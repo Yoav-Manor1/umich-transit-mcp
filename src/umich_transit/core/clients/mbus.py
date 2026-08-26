@@ -11,6 +11,7 @@ from typing import Any
 from zoneinfo import ZoneInfo
 
 import httpx
+import structlog
 
 from umich_transit.core.clients.base import (
     EtaRecord,
@@ -33,6 +34,9 @@ _BENIGN_ERROR_PREFIXES = (
 
 class BusTimeError(RuntimeError):
     """A non-benign error returned by the BusTime API (e.g. bad/missing key)."""
+
+
+logger = structlog.get_logger(__name__)
 
 
 def _parse_ts(value: str) -> datetime:
@@ -80,9 +84,28 @@ class MbusClient:
         query = {"key": self._key, "format": "json", **params}
         resp = await self._http.get(self._base + endpoint, params=query)
         resp.raise_for_status()
-        body = resp.json().get("bustime-response", {})
+        try:
+            payload = resp.json()
+        except ValueError as exc:
+            snippet = resp.text[:200]
+            raise BusTimeError(
+                f"BusTime returned non-JSON response for {endpoint}: {snippet!r}"
+            ) from exc
+        if not isinstance(payload, dict):
+            raise BusTimeError(f"BusTime response for {endpoint} was not an object")
+        if "bustime-response" not in payload:
+            raise BusTimeError(f"BusTime response for {endpoint} was missing bustime-response")
+        body = payload["bustime-response"]
+        if not isinstance(body, dict):
+            raise BusTimeError(f"BusTime response for {endpoint} had an invalid body")
         errors = body.get("error")
         if errors is not None:
+            if isinstance(errors, dict):
+                errors = [errors]
+            elif not isinstance(errors, list):
+                raise BusTimeError(f"BusTime response for {endpoint} had an invalid error field")
+            if any(not isinstance(error, dict) for error in errors):
+                raise BusTimeError(f"BusTime response for {endpoint} had an invalid error entry")
             msgs = [str(e.get("msg", "")) for e in errors]
             non_benign = [m for m in msgs if not m.startswith(_BENIGN_ERROR_PREFIXES)]
             if non_benign or not msgs:
@@ -114,18 +137,32 @@ class MbusClient:
         pattern(s). Waypoints (typ=='W') are skipped."""
         body = await self._get("/getpatterns", rt=route_id)
         out: list[tuple[int, StopRecord]] = []
+        skipped = 0
         for ptr in body.get("ptr", []):
+            if not isinstance(ptr, dict):
+                skipped += 1
+                continue
             for pt in ptr.get("pt", []):
+                if not isinstance(pt, dict):
+                    skipped += 1
+                    continue
                 if pt.get("typ") != "S":
                     continue
-                out.append((int(pt["seq"]), StopRecord(
-                    id=str(pt["stpid"]),
-                    agency="mbus",
-                    name=str(pt.get("stpnm") or pt["stpid"]),
-                    lat=float(pt["lat"]),
-                    lon=float(pt["lon"]),
-                    raw=pt,
-                )))
+                try:
+                    out.append((int(pt["seq"]), StopRecord(
+                        id=str(pt["stpid"]),
+                        agency="mbus",
+                        name=str(pt.get("stpnm") or pt["stpid"]),
+                        lat=float(pt["lat"]),
+                        lon=float(pt["lon"]),
+                        raw=pt,
+                    )))
+                except (KeyError, ValueError, TypeError):
+                    skipped += 1
+        if skipped:
+            logger.warning(
+                "mbus.skipped_malformed_entries", endpoint="/getpatterns", skipped=skipped,
+            )
         return out
 
     async def get_vehicle_positions(self, route_ids: list[str]) -> list[VehicleRecord]:
@@ -134,31 +171,65 @@ class MbusClient:
         if not route_ids:
             return []
         out: list[VehicleRecord] = []
+        skipped = 0
         for chunk in _chunked(route_ids, 10):
             body = await self._get("/getvehicles", rt=",".join(chunk))
             for raw in body.get("vehicle", []):
-                hdg = raw.get("hdg")
-                out.append(VehicleRecord(
-                    id=str(raw["vid"]),
-                    route_id=str(raw.get("rt") or ""),
-                    lat=float(raw["lat"]),
-                    lon=float(raw["lon"]),
-                    heading=float(hdg) if hdg not in (None, "") else None,
-                    captured_at=_parse_ts(str(raw["tmstmp"])),
-                ))
+                try:
+                    if not isinstance(raw, dict):
+                        raise TypeError("vehicle entry was not an object")
+                    hdg = raw.get("hdg")
+                    out.append(VehicleRecord(
+                        id=str(raw["vid"]),
+                        route_id=str(raw.get("rt") or ""),
+                        lat=float(raw["lat"]),
+                        lon=float(raw["lon"]),
+                        heading=float(str(hdg)) if hdg not in (None, "") else None,
+                        captured_at=_parse_ts(str(raw["tmstmp"])),
+                    ))
+                except (KeyError, ValueError, TypeError):
+                    skipped += 1
+        if skipped:
+            logger.warning(
+                "mbus.skipped_malformed_entries", endpoint="/getvehicles", skipped=skipped,
+            )
         return out
 
     async def get_etas(self, stop_id: str) -> list[EtaRecord]:
         """Upcoming arrival predictions for a single stop (BusTime getpredictions)."""
         body = await self._get("/getpredictions", stpid=stop_id)
-        return [_eta_from_prd(raw, stop_id) for raw in body.get("prd", [])]
+        out: list[EtaRecord] = []
+        skipped = 0
+        for raw in body.get("prd", []):
+            try:
+                if not isinstance(raw, dict):
+                    raise TypeError("prediction entry was not an object")
+                out.append(_eta_from_prd(raw, stop_id))
+            except (KeyError, ValueError, TypeError):
+                skipped += 1
+        if skipped:
+            logger.warning(
+                "mbus.skipped_malformed_entries", endpoint="/getpredictions", skipped=skipped,
+            )
+        return out
 
     async def get_etas_for_stops(self, stop_ids: list[str]) -> list[EtaRecord]:
         """Predictions for many stops in one sweep. BusTime getpredictions accepts
         up to 10 comma-separated stpid per call, so this issues ceil(N/10) requests
         instead of N — the main lever on daily API-quota usage."""
         out: list[EtaRecord] = []
+        skipped = 0
         for chunk in _chunked(stop_ids, 10):
             body = await self._get("/getpredictions", stpid=",".join(chunk))
-            out.extend(_eta_from_prd(raw) for raw in body.get("prd", []))
+            for raw in body.get("prd", []):
+                try:
+                    if not isinstance(raw, dict):
+                        raise TypeError("prediction entry was not an object")
+                    out.append(_eta_from_prd(raw))
+                except (KeyError, ValueError, TypeError):
+                    skipped += 1
+        if skipped:
+            logger.warning(
+                "mbus.skipped_malformed_entries", endpoint="/getpredictions", skipped=skipped,
+            )
         return out

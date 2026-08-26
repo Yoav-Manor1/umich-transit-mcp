@@ -12,6 +12,7 @@ from pathlib import Path
 from typing import Any
 
 import httpx
+import structlog
 from fastapi import FastAPI, Request
 from fastapi.responses import FileResponse
 from fastapi.staticfiles import StaticFiles
@@ -23,6 +24,7 @@ from umich_transit.core.storage.db import create_engine_for_url
 from umich_transit.web.leave import compute_leave
 
 STATIC_DIR = Path(__file__).resolve().parent / "static"
+logger = structlog.get_logger(__name__)
 
 
 def build_app(svc: TransitService | None = None, *, demo_mode: bool = False) -> FastAPI:
@@ -31,13 +33,13 @@ def build_app(svc: TransitService | None = None, *, demo_mode: bool = False) -> 
         if getattr(app.state, "svc", None) is None:
             engine = create_engine_for_url(settings.database_url)
             http = httpx.AsyncClient(timeout=15.0)
+            app.state.http = http
             mbus = MbusClient(
                 base_url=settings.mbus_base_url,
                 api_key=settings.mbus_api_key.get_secret_value(),
                 http=http,
             )
             app.state.svc = TransitService(engine=engine, mbus=mbus)
-            app.state.http = http
         try:
             yield
         finally:
@@ -71,7 +73,13 @@ def build_app(svc: TransitService | None = None, *, demo_mode: bool = False) -> 
         now = datetime.now(UTC)
         try:
             items = await svc.get_arrivals(stop_id=stop_id, limit=limit)
-        except (httpx.HTTPError, BusTimeError):
+        except (httpx.HTTPError, BusTimeError) as exc:
+            logger.warning(
+                "arrivals.upstream_error",
+                stop_id=stop_id,
+                error_type=type(exc).__name__,
+                exc_info=True,
+            )
             return {
                 "stop_id": stop_id, "now": now.isoformat(),
                 "arrivals": [], "leave": None, "error": "upstream",

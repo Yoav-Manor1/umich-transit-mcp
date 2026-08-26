@@ -27,6 +27,12 @@ def main() -> None:
         asyncio.run(run())
     except KeyboardInterrupt:
         log.info("poller.stopped")  # clean exit on Ctrl+C, no traceback
+    except BaseExceptionGroup as exc:
+        log.error("poller.crashed", error_type=type(exc).__name__, exc_info=True)
+        raise SystemExit(1) from exc
+    except Exception as exc:
+        log.error("poller.crashed", error_type=type(exc).__name__, exc_info=True)
+        raise SystemExit(1) from exc
 
 
 if __name__ == "__main__":
