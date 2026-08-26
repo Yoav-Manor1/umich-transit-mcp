@@ -19,4 +19,10 @@ RUN uv sync --frozen --no-install-project
 COPY . .
 RUN uv sync --frozen
 
+# Run as an unprivileged user; the data volume mount point must be writable.
+RUN useradd --create-home --uid 10001 transit \
+    && mkdir -p /app/data \
+    && chown -R transit:transit /app
+USER transit
+
 ENTRYPOINT ["sh", "deploy/entrypoint.sh"]

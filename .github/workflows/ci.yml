@@ -5,6 +5,9 @@ on:
     branches: [main]
   pull_request:
 
+permissions:
+  contents: read
+
 jobs:
   test:
     runs-on: ubuntu-latest
@@ -22,3 +25,7 @@ jobs:
         run: uv run mypy src
       - name: Test
         run: uv run pytest --cov=umich_transit --cov-report=term-missing
+      - name: Audit dependencies
+        run: |
+          uv export --all-extras --no-hashes --no-emit-project > requirements-audit.txt
+          uvx pip-audit -r requirements-audit.txt

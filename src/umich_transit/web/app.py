@@ -12,7 +12,7 @@ from pathlib import Path
 from typing import Any
 
 import httpx
-from fastapi import FastAPI, Request
+from fastapi import FastAPI, Query, Request
 from fastapi.responses import FileResponse
 from fastapi.staticfiles import StaticFiles
 
@@ -23,6 +23,11 @@ from umich_transit.core.storage.db import create_engine_for_url
 from umich_transit.web.leave import compute_leave
 
 STATIC_DIR = Path(__file__).resolve().parent / "static"
+
+MAX_QUERY_LEN = 100
+MAX_STOP_ID_LEN = 64
+MAX_RESULTS = 50
+MAX_WALK_MIN = 120
 
 
 def build_app(svc: TransitService | None = None, *, demo_mode: bool = False) -> FastAPI:
@@ -59,13 +64,20 @@ def build_app(svc: TransitService | None = None, *, demo_mode: bool = False) -> 
         return {"demo_mode": bool(request.app.state.demo_mode)}
 
     @app.get("/api/stops/search")
-    def search_stops(request: Request, q: str = "", limit: int = 8) -> dict[str, Any]:
+    def search_stops(
+        request: Request,
+        q: str = Query(default="", max_length=MAX_QUERY_LEN),
+        limit: int = Query(default=8, ge=1, le=MAX_RESULTS),
+    ) -> dict[str, Any]:
         svc: TransitService = request.app.state.svc
         return {"stops": svc.find_stops(query=q, limit=limit)}
 
     @app.get("/api/arrivals")
     async def arrivals(
-        request: Request, stop_id: str, walk_min: int = 5, limit: int = 5
+        request: Request,
+        stop_id: str = Query(min_length=1, max_length=MAX_STOP_ID_LEN),
+        walk_min: int = Query(default=5, ge=0, le=MAX_WALK_MIN),
+        limit: int = Query(default=5, ge=1, le=MAX_RESULTS),
     ) -> dict[str, Any]:
         svc: TransitService = request.app.state.svc
         now = datetime.now(UTC)
