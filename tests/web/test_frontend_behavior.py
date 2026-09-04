@@ -108,6 +108,17 @@ global.fetch = async () => ({
     assert result.returncode == 0, result.stderr
 
 
+def test_demo_observation_does_not_render_a_demo_label():
+    scenario = r"""
+renderObservation({ status: "demo" });
+assert.equal(element("updated").textContent, "");
+"""
+
+    result = _run_node(scenario)
+
+    assert result.returncode == 0, result.stderr
+
+
 def test_search_suggestion_is_an_accessible_button_that_selects_without_a_dialog():
     scenario = r"""
 let pendingSearch;

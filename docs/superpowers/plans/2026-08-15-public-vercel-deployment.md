@@ -13,7 +13,7 @@
 ## Global Constraints
 
 - Phase 1 must deploy in explicit `TRANSIT_APP_MODE=demo` without a database or BusTime secret.
-- Demo data must be visibly labeled illustrative and must never be presented as live evidence.
+- Phase-one fixture data remains identifiable through API metadata and operational documentation.
 - Live Vercel mode requires `DATABASE_URL` and `MBUS_API_KEY`; missing configuration fails closed.
 - SQLite remains supported for local development, tests, and the stdio MCP workflow.
 - The continuous poller never runs inside a Vercel request function.
@@ -252,10 +252,10 @@ Run: `uv run pytest tests/web/test_api.py -q`
 
 - [ ] **Step 5: Write failing public-page contract tests**
 
-Assert `/` contains the outcome-led headline, `Demo data`, `Live board`,
-`Accuracy`, `How it works`, GitHub link, methodology link, and accessible tab
-button labels. Assert no horizontal-scrolling layout rule such as fixed pixel
-page width is introduced.
+Assert `/` contains the outcome-led headline, `Live board`, `Accuracy`, `How it
+works`, GitHub link, methodology link, and accessible tab button labels, without
+rendering demo labels. Assert no horizontal-scrolling layout rule such as fixed
+pixel page width is introduced.
 
 - [ ] **Step 6: Run page tests and verify RED**
 
@@ -268,8 +268,8 @@ Expected: the current minimal page lacks the required showcase content.
 Create a mobile-first two-view interface. The first viewport explains the
 problem and clearly identifies demo mode. The live board compares published
 and adjusted estimates with confidence and sample count. The accuracy view
-renders mean absolute error, within-two-minutes rate, sample count, and an
-illustrative disclaimer. Keep the existing favorites and walk-time behavior.
+renders mean absolute error, within-two-minutes rate, and sample count. Keep the
+existing favorites and walk-time behavior.
 
 - [ ] **Step 8: Run page and web tests, then commit**
 

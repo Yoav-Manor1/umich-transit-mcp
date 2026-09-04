@@ -10,12 +10,14 @@ def _client() -> TestClient:
     return TestClient(build_app(DemoTransitService(), app_mode="demo"))
 
 
-def test_landing_page_explains_the_outcome_and_demo_state():
+def test_landing_page_explains_the_outcome_without_demo_labels():
     response = _client().get("/")
     assert response.status_code == 200
     page = response.text
     assert "Magic Bus says four minutes" in page
-    assert "Demo data" in page
+    assert "Demo data" not in page
+    assert "This public preview uses illustrative" not in page
+    assert "Demo results are illustrative" not in page
     assert "Live board" in page
     assert "Accuracy" in page
     assert "How it works" in page

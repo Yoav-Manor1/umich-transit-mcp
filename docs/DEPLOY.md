@@ -31,8 +31,8 @@ The public demo is
 unverified after application changes until the exact preview and production
 deployments pass the automated smoke plus desktop/mobile browser checks.
 
-Every check must pass before sharing the link. Preview and production pages must
-display the `Demo data` banner; illustrative accuracy numbers are not real-world
+Every check must pass before sharing the link. Phase-one preview and production
+deployments use versioned fixture data; their accuracy numbers are not real-world
 performance claims.
 
 ## Phase 2: live PostgreSQL deployment

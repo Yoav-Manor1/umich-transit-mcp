@@ -80,9 +80,9 @@ Deploy the completed showcase in explicit demo mode to a generated
 database. It proves the build, routing, mobile layout, copy, and recruiter flow
 before external infrastructure is connected.
 
-The page displays a persistent `Demo data` banner and an explanation that the
-arrivals and accuracy results are illustrative. It must never present fixture
-metrics as real-world performance.
+The phase-one deployment uses illustrative arrivals and accuracy results. The
+operational documentation identifies them as fixture-backed rather than
+real-world performance metrics.
 
 For this public milestone, the demo service reads the versioned showcase
 fixtures directly in memory. This supersedes the SQLite-seeding mechanism in

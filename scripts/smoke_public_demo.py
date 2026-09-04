@@ -39,7 +39,7 @@ def run_smoke(base_url: str, *, client: ClientLike | None = None) -> list[str]:
     try:
         landing = active_client.get(f"{root}/")
         _require(landing.status_code == 200, "landing page", str(landing.status_code))
-        _require("Demo data" in landing.text, "landing page", "demo label missing")
+        _require("Demo data" not in landing.text, "landing page", "demo label present")
         _require("github.com/Yoav-Manor1" in landing.text, "landing page", "GitHub link missing")
         _require('href="#methodology"' in landing.text, "landing page", "method link missing")
         passed.append("landing page")

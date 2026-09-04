@@ -77,16 +77,6 @@ button { color: inherit; }
 .header-links { display: flex; align-items: center; gap: 20px; font-size: 14px; }
 .header-links a { text-underline-offset: 4px; }
 
-.mode-badge {
-  padding: 5px 9px;
-  border: 1px solid #d29f00;
-  border-radius: 999px;
-  background: #fff6cf;
-  color: #765800;
-  font-size: 12px;
-  font-weight: 700;
-}
-
 main { width: min(1120px, calc(100% - 40px)); margin: 0 auto; }
 
 .hero { padding: 76px 0 52px; max-width: 900px; }
@@ -135,19 +125,6 @@ main { width: min(1120px, calc(100% - 40px)); margin: 0 auto; }
   background: var(--panel);
   box-shadow: var(--shadow);
 }
-
-.demo-notice {
-  display: flex;
-  align-items: center;
-  gap: 12px;
-  padding: 11px 22px;
-  border-bottom: 1px solid #e7d894;
-  background: #fff7d6;
-  color: #6b5200;
-  font-size: 13px;
-}
-
-.demo-notice strong { text-transform: uppercase; letter-spacing: .08em; font-size: 11px; }
 
 .tabs {
   display: flex;
@@ -346,7 +323,6 @@ footer {
   .hero { padding: 54px 0 38px; }
   .hero h1 { font-size: clamp(39px, 13vw, 58px); }
   .showcase { margin-bottom: 68px; border-radius: 12px; }
-  .demo-notice { align-items: flex-start; flex-direction: column; gap: 2px; padding: 11px 16px; }
   .tabs { padding: 0 18px; }
   .view { padding: 25px 18px 28px; }
   .panel-heading { align-items: flex-start; flex-direction: column; gap: 8px; }

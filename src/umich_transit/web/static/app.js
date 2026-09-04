@@ -205,7 +205,7 @@ function renderObservation(observation) {
   const status = observation?.status || "unknown";
   updated.className = `updated freshness-${status}`;
   if (status === "demo") {
-    updated.textContent = "Demo data";
+    updated.textContent = "";
   } else if (status === "live") {
     updated.textContent = `Live data · observed ${fmtClock(observation.observed_at)}`;
   } else if (status === "stale") {
@@ -316,9 +316,6 @@ async function initializeMode() {
     appMode = "local";
   }
   const demo = appMode === "demo";
-  document.getElementById("demo-notice").style.display = demo ? "flex" : "none";
-  document.getElementById("mode-badge").style.display = demo ? "inline-flex" : "none";
-
   if (demo && !loadFavs().length) {
     saveFavs([{ stop_id: "CCTC", name: "Central Campus Transit Center", walk_min: 5 }]);
     setSelected("CCTC");
