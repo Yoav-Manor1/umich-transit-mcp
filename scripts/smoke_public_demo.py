@@ -44,6 +44,21 @@ def run_smoke(base_url: str, *, client: ClientLike | None = None) -> list[str]:
         _require('href="#methodology"' in landing.text, "landing page", "method link missing")
         passed.append("landing page")
 
+        javascript = active_client.get(f"{root}/static/app.js")
+        _require(
+            javascript.status_code == 200,
+            "JavaScript asset",
+            str(javascript.status_code),
+        )
+        _require(
+            "/api/stops/search" in javascript.text
+            and "/api/arrivals" in javascript.text
+            and "renderObservation" in javascript.text,
+            "JavaScript asset",
+            "public interaction contract missing",
+        )
+        passed.append("JavaScript asset")
+
         health = active_client.get(f"{root}/api/health")
         health_body = health.json()
         _require(health.status_code == 200, "health", str(health.status_code))
@@ -60,27 +75,50 @@ def run_smoke(base_url: str, *, client: ClientLike | None = None) -> list[str]:
         )
         passed.append("readiness")
 
-        stops = active_client.get(f"{root}/api/stops/search?q=central")
+        stops = active_client.get(f"{root}/api/stops/search?q=pierpont")
         stops_body = stops.json()
         _require(stops.status_code == 200, "stop search", str(stops.status_code))
+        matching_stops = [
+            stop for stop in stops_body.get("stops", []) if stop.get("id") == "PIER"
+        ]
         _require(
-            any(stop.get("id") == "CCTC" for stop in stops_body.get("stops", [])),
+            bool(matching_stops),
             "stop search",
-            "CCTC missing",
+            "Pierpont Commons missing",
         )
         passed.append("stop search")
 
-        arrivals = active_client.get(f"{root}/api/arrivals?stop_id=CCTC&walk_min=5")
+        selected_stop_id = matching_stops[0]["id"]
+        arrivals = active_client.get(
+            f"{root}/api/arrivals?stop_id={selected_stop_id}&walk_min=5"
+        )
         arrivals_body = arrivals.json()
-        _require(arrivals.status_code == 200, "arrivals", str(arrivals.status_code))
-        _require(bool(arrivals_body.get("arrivals")), "arrivals", "no demo arrivals")
-        _require(arrivals_body.get("leave") is not None, "arrivals", "leave guidance missing")
+        _require(
+            arrivals.status_code == 200,
+            "selected stop arrivals",
+            str(arrivals.status_code),
+        )
+        _require(
+            arrivals_body.get("stop_id") == selected_stop_id,
+            "selected stop arrivals",
+            "response does not match selected stop",
+        )
+        _require(
+            bool(arrivals_body.get("arrivals")),
+            "selected stop arrivals",
+            "no Pierpont demo arrivals",
+        )
+        _require(
+            arrivals_body.get("leave") is not None,
+            "selected stop arrivals",
+            "leave guidance missing",
+        )
         _require(
             arrivals_body["arrivals"][0].get("data_source") == "demo",
-            "arrivals",
+            "selected stop arrivals",
             "demo source missing",
         )
-        passed.append("arrivals")
+        passed.append("selected stop arrivals")
 
         accuracy = active_client.get(f"{root}/api/accuracy")
         accuracy_body = accuracy.json()

@@ -5,13 +5,15 @@ client, MbusClient, and TransitService. Pass `svc` to inject a service in
 tests; otherwise the lifespan builds one from settings and closes the HTTP
 client on shutdown.
 """
-from collections.abc import AsyncIterator
+from collections.abc import AsyncIterator, Awaitable, Callable
 from contextlib import asynccontextmanager
 from datetime import UTC, datetime
 from pathlib import Path
+from time import perf_counter
 from typing import Any, cast
 
 import httpx
+import structlog
 from fastapi import FastAPI, Request, Response
 from fastapi.responses import FileResponse
 from fastapi.staticfiles import StaticFiles
@@ -24,6 +26,28 @@ from umich_transit.web.leave import compute_leave
 from umich_transit.web.protocols import WebTransitService
 
 STATIC_DIR = Path(__file__).resolve().parent / "static"
+logger = structlog.get_logger(__name__)
+
+
+def _arrival_metadata(
+    items: list[dict[str, Any]], app_mode: str | None
+) -> tuple[str, dict[str, Any]]:
+    """Summarize source and freshness without replacing the arrival contract."""
+    if not items:
+        source = "demo" if app_mode == "demo" else "live_bus_time"
+        return source, {"status": "unknown"}
+    source = str(items[0].get("data_source", "unknown"))
+    observations: list[dict[str, Any]] = []
+    for item in items:
+        observation = item.get("observation")
+        if isinstance(observation, dict):
+            observations.append(cast(dict[str, Any], observation))
+    if not observations:
+        return source, {"status": "unknown"}
+    stale = next(
+        (item for item in observations if item.get("status") == "stale"), None
+    )
+    return source, dict(stale or observations[0])
 
 
 def build_app(
@@ -56,6 +80,26 @@ def build_app(
     app = FastAPI(title="U-Mich Transit Dashboard", lifespan=lifespan)
     app.state.svc = svc
     app.state.http = managed_http
+
+    @app.middleware("http")
+    async def log_web_request(
+        request: Request,
+        call_next: Callable[[Request], Awaitable[Response]],
+    ) -> Response:
+        started_at = perf_counter()
+        request.state.upstream_status = "not_applicable"
+        request.state.freshness = "unknown"
+        try:
+            return await call_next(request)
+        finally:
+            logger.info(
+                "web.request",
+                path=request.url.path,
+                duration_ms=round((perf_counter() - started_at) * 1000, 3),
+                application_mode=app_mode or "local",
+                upstream_status=request.state.upstream_status,
+                freshness=request.state.freshness,
+            )
 
     @app.get("/api/health")
     def health() -> dict[str, str]:
@@ -101,16 +145,27 @@ def build_app(
         now = datetime.now(UTC)
         try:
             items = await svc.get_arrivals(stop_id=stop_id, limit=limit)
-        except (httpx.HTTPError, BusTimeError):
+        except (httpx.HTTPError, BusTimeError) as exc:
+            request.state.upstream_status = (
+                getattr(exc, "upstream_status", None) or "error"
+            )
+            request.state.freshness = "unknown"
             return {
                 "stop_id": stop_id, "now": now.isoformat(),
                 "arrivals": [], "leave": None, "error": "upstream",
+                "data_source": "live_bus_time",
+                "observation": {"status": "unknown"},
             }
+        data_source, observation = _arrival_metadata(items, app_mode)
+        request.state.upstream_status = 200
+        request.state.freshness = observation.get("status", "unknown")
         return {
             "stop_id": stop_id,
             "now": now.isoformat(),
             "arrivals": items,
             "leave": compute_leave(items, walk_min, now),
+            "data_source": data_source,
+            "observation": observation,
         }
 
     app.mount("/static", StaticFiles(directory=STATIC_DIR), name="static")

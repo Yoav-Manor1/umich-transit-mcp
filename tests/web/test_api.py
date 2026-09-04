@@ -3,6 +3,7 @@ from datetime import UTC, datetime, timedelta
 from unittest.mock import AsyncMock
 
 from fastapi.testclient import TestClient
+from structlog.testing import capture_logs
 
 from umich_transit.core.clients.base import EtaRecord
 from umich_transit.core.clients.mbus import BusTimeError
@@ -91,6 +92,8 @@ def test_arrivals_returns_board_and_leave():
     assert body["arrivals"][0]["route_id"] == "CN"
     assert body["leave"]["route_id"] == "CN"
     assert body["leave"]["leave_in_min"] in (3, 4)  # ~6 min ETA minus 2 min walk
+    assert body["data_source"] == "live_bus_time"
+    assert body["observation"]["status"] == "live"
     assert r.headers["cache-control"] == "no-store"
 
 
@@ -102,3 +105,47 @@ def test_arrivals_degrades_gracefully_on_upstream_error():
     assert body["arrivals"] == []
     assert body["leave"] is None
     assert body["error"] == "upstream"
+    assert body["observation"] == {"status": "unknown"}
+
+
+def test_arrivals_emits_structured_request_metadata_without_payloads_or_secrets():
+    sentinel = "SENTINEL-WEB-SECRET-2ab7"
+    service = _service()
+    service._mbus.get_etas = AsyncMock(  # noqa: SLF001 - controlled boundary fixture
+        side_effect=BusTimeError(sentinel, upstream_status=503)
+    )
+    client = TestClient(build_app(service, app_mode="live"))
+
+    with capture_logs() as logs:
+        response = client.get(
+            "/api/arrivals", params={"stop_id": "C251", "token": sentinel}
+        )
+
+    request_log = next(item for item in logs if item["event"] == "web.request")
+    assert response.status_code == 200
+    assert request_log["path"] == "/api/arrivals"
+    assert request_log["application_mode"] == "live"
+    assert request_log["upstream_status"] == 503
+    assert request_log["freshness"] == "unknown"
+    assert isinstance(request_log["duration_ms"], float)
+    assert sentinel not in str(request_log)
+
+
+def test_successful_arrival_log_reports_upstream_status_and_stale_freshness():
+    class StaleService(DemoTransitService):
+        async def get_arrivals(self, **kwargs):
+            arrivals = await super().get_arrivals(**kwargs)
+            for arrival in arrivals:
+                arrival["data_source"] = "live_bus_time"
+                arrival["observation"]["status"] = "stale"
+            return arrivals
+
+    client = TestClient(build_app(StaleService(), app_mode="live"))
+
+    with capture_logs() as logs:
+        response = client.get("/api/arrivals", params={"stop_id": "CCTC"})
+
+    request_log = next(item for item in logs if item["event"] == "web.request")
+    assert response.status_code == 200
+    assert request_log["upstream_status"] == 200
+    assert request_log["freshness"] == "stale"

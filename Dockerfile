@@ -1,7 +1,7 @@
 # Container image for the U-Mich Transit poller (24/7 data collection).
 # The MCP server can also be run from this image, but the poller is the
 # long-running process meant for deployment.
-FROM python:3.11-slim
+FROM python:3.12-slim
 
 # uv for fast, reproducible installs (pinned via uv.lock).
 COPY --from=ghcr.io/astral-sh/uv:latest /uv /uvx /bin/

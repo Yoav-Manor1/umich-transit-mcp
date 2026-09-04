@@ -7,14 +7,14 @@ nightly stats job, so reads and writes always agree on the (dow, hour) bin.
 from datetime import UTC, datetime, timedelta
 from typing import Any
 
-from sqlalchemy import Engine, select, text
+from sqlalchemy import Engine, func, select, text
 from sqlalchemy.exc import SQLAlchemyError
 
 from umich_transit.core.clients.mbus import MbusClient
 from umich_transit.core.planner import TripPlanner
 from umich_transit.core.reliability import BinKey
 from umich_transit.core.storage.db import session_scope
-from umich_transit.core.storage.models import ReliabilityStat, RouteStop
+from umich_transit.core.storage.models import ReliabilityStat, Route, RouteStop, Stop
 from umich_transit.core.storage.queries import (
     find_stops as q_find_stops,
 )
@@ -29,9 +29,16 @@ CONFIDENCE_THRESHOLD = 50  # sample_count >= -> "high"
 
 
 class TransitService:
-    def __init__(self, *, engine: Engine, mbus: MbusClient) -> None:
+    def __init__(
+        self,
+        *,
+        engine: Engine,
+        mbus: MbusClient,
+        stale_after_seconds: int = 300,
+    ) -> None:
         self._engine = engine
         self._mbus = mbus
+        self._stale_after_seconds = stale_after_seconds
 
     def list_routes(self, agency: str | None = None) -> list[dict[str, Any]]:
         with session_scope(self._engine) as session:
@@ -64,11 +71,24 @@ class TransitService:
         try:
             with self._engine.connect() as connection:
                 connection.execute(text("SELECT 1"))
+                route_count = connection.execute(
+                    select(func.count()).select_from(Route)
+                ).scalar_one()
+                stop_count = connection.execute(
+                    select(func.count()).select_from(Stop)
+                ).scalar_one()
         except SQLAlchemyError:
             return {
                 "status": "unavailable",
                 "mode": "live",
                 "data_source": "database",
+            }
+        if not route_count or not stop_count:
+            return {
+                "status": "unavailable",
+                "mode": "live",
+                "data_source": "database",
+                "reason": "empty_dataset",
             }
         return {
             "status": "ready",
@@ -119,11 +139,27 @@ class TransitService:
                     confidence = "high" if stat.sample_count >= CONFIDENCE_THRESHOLD else "low"
                     on_time: float | None = stat.on_time_pct
                     samples = stat.sample_count
+                    evidence_status = "sufficient"
+                    aggregation_scope: str | None = "route_stop_weekday_hour"
+                    adjustment_reason = (
+                        "Historical evidence supports this route-stop adjustment."
+                    )
                 else:
                     adjusted = e.predicted_arrival_at
                     confidence = "low"
                     on_time = None
                     samples = 0
+                    evidence_status = "insufficient"
+                    aggregation_scope = None
+                    adjustment_reason = (
+                        "Showing the published estimate until more history is available."
+                    )
+                age_seconds = max(
+                    0, int((moment - e.captured_at.astimezone(UTC)).total_seconds())
+                )
+                observation_status = (
+                    "stale" if age_seconds > self._stale_after_seconds else "live"
+                )
                 out.append({
                     "route_id": e.route_id,
                     "stop_id": e.stop_id,
@@ -133,6 +169,23 @@ class TransitService:
                     "on_time_pct_at_this_hour": on_time,
                     "sample_size": samples,
                     "confidence": confidence,
+                    "adjustment_seconds": int(
+                        (adjusted - e.predicted_arrival_at).total_seconds()
+                    ),
+                    "adjustment_reason": adjustment_reason,
+                    "aggregation_scope": aggregation_scope,
+                    "data_source": "live_bus_time",
+                    "observation": {
+                        "status": observation_status,
+                        "observed_at": e.captured_at,
+                        "age_seconds": age_seconds,
+                        "stale_after_seconds": self._stale_after_seconds,
+                    },
+                    "evidence": {
+                        "status": evidence_status,
+                        "sample_size": samples,
+                        "aggregation_scope": aggregation_scope,
+                    },
                 })
         return out
 

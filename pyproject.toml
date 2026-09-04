@@ -44,7 +44,7 @@ packages = ["src/umich_transit"]
 
 [tool.ruff]
 line-length = 100
-target-version = "py311"
+target-version = "py312"
 extend-exclude = ["src/umich_transit/core/storage/migrations/"]
 
 [tool.ruff.lint]
@@ -59,6 +59,9 @@ exclude = ["src/umich_transit/core/storage/migrations/"]
 [tool.pytest.ini_options]
 testpaths = ["tests"]
 asyncio_mode = "auto"
+filterwarnings = [
+    "ignore:Using `httpx` with `starlette.testclient` is deprecated.*:starlette.exceptions.StarletteDeprecationWarning",
+]
 
 [tool.vercel]
 entrypoint = "app:app"

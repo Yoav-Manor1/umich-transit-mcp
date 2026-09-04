@@ -34,6 +34,10 @@ _BENIGN_ERROR_PREFIXES = (
 class BusTimeError(RuntimeError):
     """A non-benign error returned by the BusTime API (e.g. bad/missing key)."""
 
+    def __init__(self, message: str, *, upstream_status: int | None = None) -> None:
+        super().__init__(message)
+        self.upstream_status = upstream_status
+
 
 def _parse_ts(value: str) -> datetime:
     """Parse a BusTime local timestamp into an America/Detroit-aware datetime.
@@ -78,16 +82,28 @@ class MbusClient:
 
     async def _get(self, endpoint: str, **params: str) -> Any:
         query = {"key": self._key, "format": "json", **params}
-        resp = await self._http.get(self._base + endpoint, params=query)
-        resp.raise_for_status()
+        try:
+            resp = await self._http.get(self._base + endpoint, params=query)
+            resp.raise_for_status()
+        except httpx.HTTPStatusError as exc:
+            raise BusTimeError(
+                f"BusTime request failed with HTTP {exc.response.status_code}",
+                upstream_status=exc.response.status_code,
+            ) from None
+        except httpx.RequestError:
+            raise BusTimeError("BusTime request failed") from None
         body = resp.json().get("bustime-response", {})
         errors = body.get("error")
         if errors is not None:
             msgs = [str(e.get("msg", "")) for e in errors]
             non_benign = [m for m in msgs if not m.startswith(_BENIGN_ERROR_PREFIXES)]
             if non_benign or not msgs:
+                safe_message = "; ".join(msgs) or "BusTime returned an empty error array"
+                if self._key:
+                    safe_message = safe_message.replace(self._key, "[REDACTED]")
                 raise BusTimeError(
-                    "; ".join(msgs) or "BusTime returned an empty error array"
+                    safe_message,
+                    upstream_status=resp.status_code,
                 )
             # All errors are benign per-route/stop "no data" notes. BusTime can
             # still include real data alongside them (e.g. getvehicles across

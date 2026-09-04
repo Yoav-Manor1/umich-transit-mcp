@@ -1,10 +1,12 @@
 """Tests for the database engine and session factory."""
 
 import pytest
+from alembic.config import Config
 from sqlalchemy import text
 
 from umich_transit.core.storage.db import (
     create_engine_for_url,
+    escape_alembic_url,
     normalize_database_url,
     session_scope,
 )
@@ -21,6 +23,15 @@ from umich_transit.core.storage.db import (
 )
 def test_normalize_database_url(raw, expected):
     assert normalize_database_url(raw) == expected
+
+
+def test_alembic_url_preserves_percent_encoded_credentials():
+    database_url = "postgresql+psycopg://user:p%40ss%25word@host/transit"
+    config = Config()
+
+    config.set_main_option("sqlalchemy.url", escape_alembic_url(database_url))
+
+    assert config.get_main_option("sqlalchemy.url") == database_url
 
 
 def test_create_engine_uses_wal_for_sqlite():

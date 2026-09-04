@@ -5,7 +5,8 @@ answers about University of Michigan buses. It does not just relay Magic Bus
 predictions: it logs them, infers actual arrivals from live GPS, and learns the
 gap between the two.
 
-**Live demo:** [honest-eta-theta.vercel.app](https://honest-eta-theta.vercel.app)
+**Public demo (last deployed build; re-verification pending):**
+[honest-eta-theta.vercel.app](https://honest-eta-theta.vercel.app)
 
 > "Magic Bus says 4 minutes. The bus shows up in 12.
 > This server learns from that gap and tells you the difference."
@@ -16,7 +17,7 @@ gap between the two.
 -->
 
 ![Python](https://img.shields.io/badge/python-3.12+-blue)
-![Tests](https://img.shields.io/badge/tests-127%20passing-brightgreen)
+![Tests](https://img.shields.io/badge/tests-142%20passing-brightgreen)
 ![License](https://img.shields.io/badge/license-MIT-green)
 
 ## What it does
@@ -165,8 +166,10 @@ deployments run in explicit demo mode and need no secrets. Live deployments use
 a managed PostgreSQL `DATABASE_URL`; the continuous poller stays on an always-on
 host because it is a worker, not a request handler.
 
-The verified public demo is available at
-[honest-eta-theta.vercel.app](https://honest-eta-theta.vercel.app).
+The last deployed public demo is
+[honest-eta-theta.vercel.app](https://honest-eta-theta.vercel.app). Re-run the
+deployment smoke and browser checks against the exact new deployment before
+describing it as verified.
 
 See [docs/DEPLOY.md](docs/DEPLOY.md) for Vercel, PostgreSQL migration, worker,
 rollback, and later custom-domain instructions.
@@ -224,8 +227,6 @@ wrong day.
 - `stop_reliability` tool (per-stop detail)
 - Batch `get_arrivals` (BusTime accepts up to 10 stops per call)
 - 90-day prediction pruning job (+ a `captured_at` index)
-- FastAPI HTTP layer over the same `core/`
-- Next.js dashboard with route-reliability heatmaps
 - Crowdsourced arrival confirmations
 
 ## Development

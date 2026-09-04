@@ -108,10 +108,11 @@ function onSearch(event) {
       const data = await api("/api/stops/search", { q: query, limit: 8 });
       results.innerHTML = "";
       (data.stops || []).forEach((stop) => {
-        const item = document.createElement("div");
+        const item = document.createElement("button");
+        item.type = "button";
         item.className = "result";
         item.textContent = stop.name;
-        item.onclick = () => addFav(stop);
+        item.onclick = () => addFav(stop, 5);
         results.appendChild(item);
       });
     } catch {
@@ -199,6 +200,21 @@ function renderArrivals(arrivals, nowIso) {
   });
 }
 
+function renderObservation(observation) {
+  const updated = document.getElementById("updated");
+  const status = observation?.status || "unknown";
+  updated.className = `updated freshness-${status}`;
+  if (status === "demo") {
+    updated.textContent = "Demo data";
+  } else if (status === "live") {
+    updated.textContent = `Live data · observed ${fmtClock(observation.observed_at)}`;
+  } else if (status === "stale") {
+    updated.textContent = `Stale data · observed ${fmtClock(observation.observed_at)}`;
+  } else {
+    updated.textContent = "Freshness unknown";
+  }
+}
+
 async function refresh() {
   const selected = getSelected();
   const empty = document.getElementById("empty");
@@ -222,14 +238,18 @@ async function refresh() {
     setNote("Could not refresh the arrival feed. Keeping the last visible result.");
     return;
   }
-  setNote(data.error ? "The live bus feed is temporarily unavailable." : "");
+  if (data.error) {
+    setNote("The live bus feed is temporarily unavailable. Keeping the last visible result.");
+    return;
+  }
+  setNote("");
 
   const favorite = loadFavs().find((item) => item.stop_id === selected);
   document.getElementById("stop-name").textContent = favorite ? favorite.name : selected;
   document.getElementById("walk-label").textContent = `${currentWalk()} minute walk`;
   renderBanner(data.leave);
   renderArrivals(data.arrivals || [], data.now);
-  document.getElementById("updated").textContent = `Updated ${fmtClock(data.now)}`;
+  renderObservation(data.observation);
 }
 
 function renderAccuracy(report) {

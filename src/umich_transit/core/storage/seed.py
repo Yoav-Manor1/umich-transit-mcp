@@ -7,7 +7,9 @@ from datetime import UTC, datetime
 from typing import Protocol
 
 from sqlalchemy import Engine
+from sqlalchemy.dialects.postgresql import insert as postgresql_insert
 from sqlalchemy.dialects.sqlite import insert as sqlite_insert
+from sqlalchemy.sql.base import Executable
 
 from umich_transit.core.clients.base import RouteRecord, StopRecord
 from umich_transit.core.storage.db import session_scope
@@ -17,6 +19,85 @@ from umich_transit.core.storage.models import Route, RouteStop, Stop
 class _StaticDataClient(Protocol):
     async def get_routes(self) -> list[RouteRecord]: ...
     async def get_pattern_stops(self, route_id: str) -> list[tuple[int, StopRecord]]: ...
+
+
+def build_route_upsert(
+    dialect_name: str, route: RouteRecord, updated_at: datetime
+) -> Executable:
+    """Build the route upsert using the destination engine's SQL dialect."""
+    values = {
+        "id": route.id,
+        "agency": route.agency,
+        "short_name": route.short_name,
+        "long_name": route.long_name,
+        "color": route.color,
+        "raw_json": route.raw,
+        "updated_at": updated_at,
+    }
+    updates = {
+        "short_name": route.short_name,
+        "long_name": route.long_name,
+        "color": route.color,
+        "raw_json": route.raw,
+        "updated_at": updated_at,
+    }
+    if dialect_name == "sqlite":
+        return sqlite_insert(Route).values(**values).on_conflict_do_update(
+            index_elements=[Route.id], set_=updates
+        )
+    if dialect_name == "postgresql":
+        return postgresql_insert(Route).values(**values).on_conflict_do_update(
+            index_elements=[Route.id], set_=updates
+        )
+    raise ValueError(f"Unsupported database dialect: {dialect_name}")
+
+
+def build_stop_upsert(
+    dialect_name: str, stop: StopRecord, updated_at: datetime
+) -> Executable:
+    """Build the stop upsert using the destination engine's SQL dialect."""
+    values = {
+        "id": stop.id,
+        "agency": stop.agency,
+        "name": stop.name,
+        "lat": stop.lat,
+        "lon": stop.lon,
+        "raw_json": stop.raw,
+        "updated_at": updated_at,
+    }
+    updates = {
+        "name": stop.name,
+        "lat": stop.lat,
+        "lon": stop.lon,
+        "raw_json": stop.raw,
+        "updated_at": updated_at,
+    }
+    if dialect_name == "sqlite":
+        return sqlite_insert(Stop).values(**values).on_conflict_do_update(
+            index_elements=[Stop.id], set_=updates
+        )
+    if dialect_name == "postgresql":
+        return postgresql_insert(Stop).values(**values).on_conflict_do_update(
+            index_elements=[Stop.id], set_=updates
+        )
+    raise ValueError(f"Unsupported database dialect: {dialect_name}")
+
+
+def build_route_stop_insert(
+    dialect_name: str, route_id: str, stop_id: str, sequence: int
+) -> Executable:
+    """Build an idempotent route-stop insert for SQLite or PostgreSQL."""
+    values = {"route_id": route_id, "stop_id": stop_id, "sequence": sequence}
+    conflict_columns = [RouteStop.route_id, RouteStop.stop_id, RouteStop.sequence]
+    if dialect_name == "sqlite":
+        return sqlite_insert(RouteStop).values(**values).on_conflict_do_nothing(
+            index_elements=conflict_columns
+        )
+    if dialect_name == "postgresql":
+        return postgresql_insert(RouteStop).values(**values).on_conflict_do_nothing(
+            index_elements=conflict_columns
+        )
+    raise ValueError(f"Unsupported database dialect: {dialect_name}")
 
 
 async def seed_static_data(
@@ -41,49 +122,15 @@ async def seed_static_data(
 
     with session_scope(engine) as session:
         for r in routes:
-            session.execute(
-                sqlite_insert(Route)
-                .values(
-                    id=r.id, agency=r.agency, short_name=r.short_name,
-                    long_name=r.long_name, color=r.color, raw_json=r.raw,
-                    updated_at=now,
-                )
-                .on_conflict_do_update(
-                    index_elements=[Route.id],
-                    set_={
-                        "short_name": r.short_name, "long_name": r.long_name,
-                        "color": r.color, "raw_json": r.raw, "updated_at": now,
-                    },
-                )
-            )
+            session.execute(build_route_upsert(engine.dialect.name, r, now))
 
         for route_id, stops in patterns.items():
             for seq, st in stops:
                 if st.id not in seen_stops:
-                    session.execute(
-                        sqlite_insert(Stop)
-                        .values(
-                            id=st.id, agency=st.agency, name=st.name,
-                            lat=st.lat, lon=st.lon, raw_json=st.raw,
-                            updated_at=now,
-                        )
-                        .on_conflict_do_update(
-                            index_elements=[Stop.id],
-                            set_={
-                                "name": st.name, "lat": st.lat, "lon": st.lon,
-                                "raw_json": st.raw, "updated_at": now,
-                            },
-                        )
-                    )
+                    session.execute(build_stop_upsert(engine.dialect.name, st, now))
                     seen_stops.add(st.id)
                 session.execute(
-                    sqlite_insert(RouteStop)
-                    .values(route_id=route_id, stop_id=st.id, sequence=seq)
-                    .on_conflict_do_nothing(
-                        index_elements=[
-                            RouteStop.route_id, RouteStop.stop_id, RouteStop.sequence,
-                        ]
-                    )
+                    build_route_stop_insert(engine.dialect.name, route_id, st.id, seq)
                 )
                 link_count += 1
 

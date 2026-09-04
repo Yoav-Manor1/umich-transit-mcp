@@ -16,6 +16,11 @@ def normalize_database_url(url: str) -> str:
     return url
 
 
+def escape_alembic_url(url: str) -> str:
+    """Escape percent signs before storing a URL in Alembic's ConfigParser."""
+    return url.replace("%", "%%")
+
+
 def create_engine_for_url(url: str) -> Engine:
     """Build an Engine; enable WAL + foreign keys for file-backed SQLite.
 

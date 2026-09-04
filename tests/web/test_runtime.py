@@ -21,6 +21,11 @@ def test_vercel_requires_explicit_mode():
         resolve_app_mode(None, on_vercel=True)
 
 
+def test_vercel_rejects_explicit_local_mode():
+    with pytest.raises(ValueError, match="local mode is not allowed on Vercel"):
+        resolve_app_mode("local", on_vercel=True)
+
+
 def test_unknown_mode_is_rejected():
     with pytest.raises(ValueError, match="local, demo, or live"):
         resolve_app_mode("preview", on_vercel=False)
@@ -56,3 +61,18 @@ def test_live_mode_rejects_missing_bus_key():
     )
     with pytest.raises(ValueError, match="MBUS_API_KEY"):
         build_runtime_service("live", config)
+
+
+@pytest.mark.asyncio
+async def test_live_mode_accepts_explicit_psycopg_url():
+    config = Settings(
+        _env_file=None,
+        database_url="postgresql+psycopg://user:pass@example.test/transit",
+        mbus_api_key=SecretStr("configured"),
+    )
+
+    service, http = build_runtime_service("live", config)
+
+    assert service is not None
+    assert http is not None
+    await http.aclose()

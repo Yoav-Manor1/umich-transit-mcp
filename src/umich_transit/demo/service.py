@@ -84,6 +84,16 @@ class DemoTransitService:
                     "adjustment_reason": row["adjustment_reason"],
                     "aggregation_scope": row["aggregation_scope"],
                     "data_source": "demo",
+                    "observation": {
+                        "status": "demo",
+                        "observed_at": moment,
+                        "age_seconds": 0,
+                    },
+                    "evidence": {
+                        "status": "illustrative",
+                        "sample_size": row["sample_size"],
+                        "aggregation_scope": row["aggregation_scope"],
+                    },
                 }
             )
         return arrivals

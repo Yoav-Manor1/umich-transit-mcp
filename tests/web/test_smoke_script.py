@@ -16,10 +16,11 @@ def test_smoke_check_covers_the_public_demo_contract():
 
     assert checks == [
         "landing page",
+        "JavaScript asset",
         "health",
         "readiness",
         "stop search",
-        "arrivals",
+        "selected stop arrivals",
         "accuracy",
         "static CSS",
     ]

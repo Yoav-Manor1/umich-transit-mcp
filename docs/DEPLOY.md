@@ -26,8 +26,10 @@ After deployment, verify the generated URL:
 uv run python scripts/smoke_public_demo.py --base-url https://YOUR-PROJECT.vercel.app
 ```
 
-The current verified deployment is
-[honest-eta-theta.vercel.app](https://honest-eta-theta.vercel.app).
+The last deployed build is
+[honest-eta-theta.vercel.app](https://honest-eta-theta.vercel.app). Treat it as
+unverified after application changes until the exact preview and production
+deployments pass the automated smoke plus desktop/mobile browser checks.
 
 Every check must pass before sharing the link. Preview and production pages must
 display the `Demo data` banner; illustrative accuracy numbers are not real-world

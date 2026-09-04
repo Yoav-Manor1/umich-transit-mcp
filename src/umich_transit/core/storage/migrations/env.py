@@ -4,12 +4,12 @@ from alembic import context
 from sqlalchemy import engine_from_config, pool
 
 from umich_transit.config import settings
-from umich_transit.core.storage.db import normalize_database_url
+from umich_transit.core.storage.db import escape_alembic_url, normalize_database_url
 from umich_transit.core.storage.models import Base
 
 config = context.config
 database_url = normalize_database_url(settings.database_url)
-config.set_main_option("sqlalchemy.url", database_url)
+config.set_main_option("sqlalchemy.url", escape_alembic_url(database_url))
 
 if config.config_file_name is not None:
     fileConfig(config.config_file_name)

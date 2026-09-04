@@ -1,11 +1,19 @@
 """Tests for static-data seeding (routes, stops, route_stops) from the client."""
+from datetime import UTC, datetime
+
 import pytest
 from sqlalchemy import func, select
+from sqlalchemy.dialects import postgresql
 
 from umich_transit.core.clients.base import RouteRecord, StopRecord
 from umich_transit.core.storage.db import create_engine_for_url, session_scope
 from umich_transit.core.storage.models import Base, Route, RouteStop, Stop
-from umich_transit.core.storage.seed import seed_static_data
+from umich_transit.core.storage.seed import (
+    build_route_stop_insert,
+    build_route_upsert,
+    build_stop_upsert,
+    seed_static_data,
+)
 
 
 class FakeClient:
@@ -80,3 +88,29 @@ async def test_seed_updates_existing_route_name(engine):
     with session_scope(engine) as s:
         r = s.get(Route, "CN")
         assert r.long_name == "Commuter North (renamed)"
+
+
+def test_seed_statements_compile_for_postgresql():
+    now = datetime(2026, 8, 15, tzinfo=UTC)
+    route = FakeClient()._routes[0]
+    stop = FakeClient()._patterns["BB"][0][1]
+
+    route_sql = str(
+        build_route_upsert("postgresql", route, now).compile(
+            dialect=postgresql.dialect()
+        )
+    )
+    stop_sql = str(
+        build_stop_upsert("postgresql", stop, now).compile(
+            dialect=postgresql.dialect()
+        )
+    )
+    link_sql = str(
+        build_route_stop_insert("postgresql", "BB", "s1", 1).compile(
+            dialect=postgresql.dialect()
+        )
+    )
+
+    assert "ON CONFLICT (id) DO UPDATE" in route_sql
+    assert "ON CONFLICT (id) DO UPDATE" in stop_sql
+    assert "ON CONFLICT (route_id, stop_id, sequence) DO NOTHING" in link_sql

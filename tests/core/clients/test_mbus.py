@@ -113,10 +113,30 @@ async def test_invalid_or_missing_key_raises(client):
 
 
 @respx.mock
-async def test_get_etas_raises_on_5xx(client):
+async def test_get_etas_redacts_api_key_from_http_errors():
+    sentinel = "SENTINEL-BUSTIME-KEY-9dfe"
+    async with httpx.AsyncClient() as http:
+        keyed_client = MbusClient(
+            base_url="https://mbus.example.test",
+            api_key=sentinel,
+            http=http,
+        )
+        respx.get(url__startswith=BASE + "/getpredictions").mock(
+            return_value=httpx.Response(503)
+        )
+
+        with pytest.raises(BusTimeError) as raised:
+            await keyed_client.get_etas(stop_id="1001")
+
+    assert sentinel not in str(raised.value)
+    assert raised.value.upstream_status == 503
+
+
+@respx.mock
+async def test_get_etas_raises_sanitized_error_on_5xx(client):
     respx.get(url__startswith=BASE + "/getpredictions").mock(
         return_value=httpx.Response(503))
-    with pytest.raises(httpx.HTTPStatusError):
+    with pytest.raises(BusTimeError, match="HTTP 503"):
         await client.get_etas(stop_id="1001")
 
 

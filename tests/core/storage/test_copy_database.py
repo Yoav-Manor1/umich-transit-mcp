@@ -1,12 +1,16 @@
 """Safe, count-verified copying between SQLAlchemy databases."""
 
 from datetime import UTC, datetime, timedelta
+from types import SimpleNamespace
 
 import pytest
 from sqlalchemy import func, select
 
 from scripts.migrate_database import redact_database_url, validate_database_urls
-from umich_transit.core.storage.copy_database import copy_database
+from umich_transit.core.storage.copy_database import (
+    _advance_postgresql_sequences,
+    copy_database,
+)
 from umich_transit.core.storage.db import create_engine_for_url, session_scope
 from umich_transit.core.storage.models import (
     Arrival,
@@ -161,3 +165,41 @@ def test_database_url_redaction_never_returns_password():
     redacted = redact_database_url("postgresql://yoav:super-secret@host/transit")
     assert redacted == "postgresql://yoav:***@host/transit"
     assert "super-secret" not in redacted
+
+
+class _ScalarResult:
+    def __init__(self, value):
+        self._value = value
+
+    def scalar_one_or_none(self):
+        return self._value
+
+
+class _RecordingPostgresqlConnection:
+    dialect = SimpleNamespace(name="postgresql")
+
+    def __init__(self):
+        self.calls = []
+
+    def execute(self, statement, parameters=None):
+        self.calls.append((str(statement), parameters))
+        if "pg_get_serial_sequence" in str(statement):
+            table_name = parameters["table_name"]
+            return _ScalarResult(f"public.{table_name}_id_seq")
+        return _ScalarResult(None)
+
+
+def test_postgresql_sequences_advance_past_copied_primary_keys():
+    connection = _RecordingPostgresqlConnection()
+
+    _advance_postgresql_sequences(
+        connection,
+        {"predictions": 11, "arrivals": 7, "parse_errors": 4},
+    )
+
+    setval_calls = [call for call in connection.calls if "setval" in call[0]]
+    assert [call[1] for call in setval_calls] == [
+        {"sequence_name": "public.predictions_id_seq", "last_id": 11},
+        {"sequence_name": "public.arrivals_id_seq", "last_id": 7},
+        {"sequence_name": "public.parse_errors_id_seq", "last_id": 4},
+    ]

@@ -8,7 +8,7 @@ from fastapi import FastAPI
 from umich_transit.config import Settings
 from umich_transit.core.clients.mbus import MbusClient
 from umich_transit.core.service import TransitService
-from umich_transit.core.storage.db import create_engine_for_url
+from umich_transit.core.storage.db import create_engine_for_url, normalize_database_url
 from umich_transit.demo.service import DemoTransitService
 from umich_transit.web.protocols import WebTransitService
 
@@ -28,6 +28,8 @@ def resolve_app_mode(configured: str | None, *, on_vercel: bool) -> AppMode:
         return "local"
     if configured not in {"local", "demo", "live"}:
         raise ValueError("TRANSIT_APP_MODE must be local, demo, or live")
+    if on_vercel and configured == "local":
+        raise ValueError("local mode is not allowed on Vercel")
     return cast(AppMode, configured)
 
 
@@ -43,7 +45,8 @@ def build_runtime_service(
     if mode == "live":
         if not api_key:
             raise ValueError("MBUS_API_KEY is required in live mode")
-        if not config.database_url.startswith(("postgres://", "postgresql://")):
+        normalized_url = normalize_database_url(config.database_url)
+        if not normalized_url.startswith("postgresql+psycopg://"):
             raise ValueError("Live mode requires a PostgreSQL DATABASE_URL")
 
     engine = create_engine_for_url(config.database_url)

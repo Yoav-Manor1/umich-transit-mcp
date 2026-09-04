@@ -60,6 +60,37 @@ async def test_get_arrivals_low_confidence_when_no_stat(engine):
     assert arrivals[0]["sample_size"] == 0
 
 
+async def test_get_arrivals_reports_stale_observation_and_evidence(engine):
+    now = datetime(2026, 5, 1, 18, 0, tzinfo=UTC)
+    observed_at = now - timedelta(minutes=6)
+    fake_client = AsyncMock()
+    fake_client.get_etas = AsyncMock(return_value=[
+        EtaRecord(
+            route_id="r1",
+            stop_id="s1",
+            vehicle_id="v1",
+            predicted_arrival_at=now + timedelta(minutes=4),
+            captured_at=observed_at,
+        ),
+    ])
+    svc = TransitService(engine=engine, mbus=fake_client)
+
+    arrivals = await svc.get_arrivals(stop_id="s1", now=now)
+
+    assert arrivals[0]["data_source"] == "live_bus_time"
+    assert arrivals[0]["observation"] == {
+        "status": "stale",
+        "observed_at": observed_at,
+        "age_seconds": 360,
+        "stale_after_seconds": 300,
+    }
+    assert arrivals[0]["evidence"] == {
+        "status": "insufficient",
+        "sample_size": 0,
+        "aggregation_scope": None,
+    }
+
+
 async def test_get_arrivals_filters_by_route(engine):
     now = datetime(2026, 5, 1, 18, 0, tzinfo=UTC)
     fake_client = AsyncMock()
@@ -123,6 +154,19 @@ def test_readiness_checks_the_live_database(engine):
         "status": "ready",
         "mode": "live",
         "data_source": "database",
+    }
+
+
+def test_readiness_rejects_a_reachable_but_empty_live_dataset():
+    engine = create_engine_for_url("sqlite:///:memory:")
+    Base.metadata.create_all(engine)
+    svc = TransitService(engine=engine, mbus=AsyncMock())
+
+    assert svc.readiness() == {
+        "status": "unavailable",
+        "mode": "live",
+        "data_source": "database",
+        "reason": "empty_dataset",
     }
 
 
