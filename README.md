@@ -5,8 +5,8 @@ answers about University of Michigan buses. It does not just relay Magic Bus
 predictions: it logs them, infers actual arrivals from live GPS, and learns the
 gap between the two.
 
-**Public demo (last deployed build; re-verification pending):**
-[honest-eta-theta.vercel.app](https://honest-eta-theta.vercel.app)
+**Public demo:**
+[truebluetransit.com](https://truebluetransit.com)
 
 > "Magic Bus says 4 minutes. The bus shows up in 12.
 > This server learns from that gap and tells you the difference."
@@ -166,8 +166,8 @@ deployments run in explicit demo mode and need no secrets. Live deployments use
 a managed PostgreSQL `DATABASE_URL`; the continuous poller stays on an always-on
 host because it is a worker, not a request handler.
 
-The last deployed public demo is
-[honest-eta-theta.vercel.app](https://honest-eta-theta.vercel.app). Re-run the
+The public demo is
+[truebluetransit.com](https://truebluetransit.com). Re-run the
 deployment smoke and browser checks against the exact new deployment before
 describing it as verified.
 
